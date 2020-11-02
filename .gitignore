@@ -1,5 +1,7 @@
 *.egg
 *.pt
+*.boo
+*.dat
 /built/
 Makefile
 bams/
