@@ -83,4 +83,9 @@ void LinearToGamma(inout vec4 vec)
     vec.xyz = pow(vec.xyz, vec3(1.0/2.2));
 }
 
+vec3 Project(mat4 mvp, vec3 p) {
+    vec4 proj = mvp * vec4(p, 1);
+    return (proj.xyz / proj.w) * vec3(0.5) + vec3(0.5);
+}
+
 #endif // COMMON_INC_GLSL

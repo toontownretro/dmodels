@@ -11,6 +11,8 @@
 #ifndef COMMON_SHADOWS_FRAG_INC_GLSL
 #define COMMON_SHADOWS_FRAG_INC_GLSL
 
+#include "common.inc.glsl"
+
 #ifdef HAS_SHADOW_SUNLIGHT
 
 #ifndef PSSM_SPLITS
@@ -19,6 +21,11 @@
 #define SHADOW_BLUR 1.5
 #define DEPTH_BIAS 0.0001
 #endif
+
+//#define DO_PCSS
+#define PCSS_PENUMBRA_SIZE 11.0
+#define PCSS_MIN_PENUMBRA_SIZE 5.0
+#define FILTER_RADIUS 3.0
 
 uniform float osg_FrameTime;
 
@@ -73,12 +80,41 @@ vec2 poissonDisk_16[16] = vec2[](
     vec2( 0.14383161, -0.14100790 )
 );
 
-float DoShadowSimple(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
+const vec2 halton_2D_16[16] = vec2[](
+    vec2(0.00000, -0.33333),
+    vec2(-0.50000, 0.33333),
+    vec2(0.50000, -0.77778),
+    vec2(-0.75000, -0.11111),
+    vec2(0.25000, 0.55556),
+    vec2(-0.25000, -0.55556),
+    vec2(0.75000, 0.11111),
+    vec2(-0.87500, 0.77778),
+    vec2(0.12500, -0.92593),
+    vec2(-0.37500, -0.25926),
+    vec2(0.62500, 0.40741),
+    vec2(-0.62500, -0.70370),
+    vec2(0.37500, -0.03704),
+    vec2(-0.12500, 0.62963),
+    vec2(0.87500, -0.48148),
+    vec2(-0.93750, 0.18519)
+);
+
+vec2 FindFilterSize(mat4 proj, vec3 pos, float radius) {
+    vec3 tangent = vec3(1, 0, 0);
+    vec3 binormal = vec3(0, 1, 0);
+
+    vec2 projOrigin = Project(proj, pos).xy;
+    vec2 projTangent = abs(Project(proj, pos + tangent + binormal).xy - projOrigin);
+
+    return vec2(max(projTangent.x, projTangent.y) * radius);
+}
+
+float DoShadowSimple(sampler2DArray shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
 {
-    return texture(shadowSampler, vec4(shadowCoord.xy, cascade, depthCmp));
+    return step(depthCmp, texture(shadowSampler, vec3(shadowCoord.xy, cascade)).x);
 }
 /*
-float DoShadowPoisson16Sample(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
+float DoShadowPoisson16Sample(sampler2DArray shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
 {
     vec2 vPoissonOffset[8] = vec2[]( vec2(  0.3475f,  0.0042f ),
 				 vec2(  0.8806f,  0.3430f ),
@@ -137,7 +173,7 @@ float DoShadowPoisson16Sample(sampler2DArrayShadow shadowSampler, vec3 shadowCoo
     return fResult;
 }
 
-float DoShadowNvidiaPCF5x5Guassian(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
+float DoShadowNvidiaPCF5x5Guassian(sampler2DArray shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
 {
     float fEpsilonX = SHADOW_TEXEL_SIZE;
     float fTwoEpsilonX = 2.0 * fEpsilonX;
@@ -205,18 +241,18 @@ float PCSS_PenumbraSize(float zReceiver, float zBlocker)
     return (zReceiver - zBlocker) / zBlocker;
 }
 
-float PCSS_PCF(sampler2DArrayShadow shadowSampler, int cascade, vec3 shadowCoord, float depthCmp, float filterRadiusUV)
+float PCSS_PCF(sampler2DArray shadowSampler, int cascade, vec3 shadowCoord, float depthCmp, float filterRadiusUV)
 {
     float sum = 0.0;
     for (int i = 0; i < 16; i++)
     {
 	vec2 offset = poissonDisk_16[i] * filterRadiusUV;
-	sum += texture(shadowSampler, vec4(shadowCoord.xy + offset, cascade, depthCmp));
+	sum += step(depthCmp, texture(shadowSampler, vec3(shadowCoord.xy + offset, cascade)).x);
     }
     return sum / 16.0;
 }
 
-void PCSS_FindBlocker(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int cascade, float depthCmp, inout float avgBlockerDepth, inout int blockers)
+void PCSS_FindBlocker(sampler2DArray shadowSampler, vec3 shadowCoord, int cascade, float depthCmp, inout float avgBlockerDepth, inout int blockers)
 {
     float searchWidth = min(1.0, lightSizeUV * (depthCmp - nearPlane) / depthCmp);
 
@@ -224,7 +260,7 @@ void PCSS_FindBlocker(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int 
 
     for (int i = 0; i < blockerSearchNumSamples; i++)
     {
-	float shadowMapDepth = texture(shadowSampler, vec4(shadowCoord.xy + (poissonDisk_16[i] * searchWidth), cascade, depthCmp));
+	float shadowMapDepth = texture(shadowSampler, vec3(shadowCoord.xy + (poissonDisk_16[i] * searchWidth), cascade)).x;
 	if (shadowMapDepth < depthCmp)
 	{
 	    blockerSum += shadowMapDepth;
@@ -235,7 +271,7 @@ void PCSS_FindBlocker(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int 
     avgBlockerDepth = blockerSum / blockers;
 }
 
-float DoShadowPCSS(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
+float DoShadowPCSS(sampler2DArray shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
 {
     float avgBlockerDepth = 0.0;
     int numBlockers = 0;
@@ -249,20 +285,20 @@ float DoShadowPCSS(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int cas
     return PCSS_PCF(shadowSampler, cascade, shadowCoord, depthCmp, filterRadiusUV);
 }
 
-float SampleCascade(sampler2DArrayShadow shadowSampler, vec3 proj, float depthCmp, int cascade, int diskIdx)
+float SampleCascade(sampler2DArray shadowSampler, vec3 proj, float depthCmp, int cascade, int diskIdx)
 {
-	float val = texture(shadowSampler, vec4(proj.xy + (poissonDisk[diskIdx].xy * SHADOW_BLUR), cascade, depthCmp));
+	float val = step(depthCmp, texture(shadowSampler, vec3(proj.xy + (poissonDisk[diskIdx].xy * SHADOW_BLUR), cascade)).x);
 	return val;
 }
 
-float SampleCascade8(sampler2DArrayShadow shadowSampler, vec3 proj, int cascade, float depthCmp, int i)
+float SampleCascade8(sampler2DArray shadowSampler, vec3 proj, int cascade, float depthCmp, int i)
 {
-    return texture(shadowSampler, vec4(proj.xy + (poissonDisk_8[i].xy * SHADOW_BLUR), cascade, depthCmp));
+    return step(depthCmp, texture(shadowSampler, vec3(proj.xy + (poissonDisk_8[i].xy * SHADOW_BLUR), cascade)).x);
 }
 
-float SampleCascadeGather(sampler2DArrayShadow shadowSampler, vec3 coords, float depthCmp)
+float SampleCascadeGather(sampler2DArray shadowSampler, vec3 coords, float depthCmp)
 {
-    vec4 shadow = textureGather(shadowSampler, coords, depthCmp);
+    vec4 shadow = step(vec4(depthCmp), textureGather(shadowSampler, coords, 0));
     float avg = dot(shadow, vec4(0.25));
     return avg;
 }
@@ -272,7 +308,7 @@ float noise(vec2 seed)
     return fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-float DoShadowGather(sampler2DArrayShadow shadowSampler, vec3 proj, int cascade, float depthCmp)
+float DoShadowGather(sampler2DArray shadowSampler, vec3 proj, int cascade, float depthCmp)
 {
     float shad = 0.0;
     for (int i = 0; i < 8; i++)
@@ -284,7 +320,7 @@ float DoShadowGather(sampler2DArrayShadow shadowSampler, vec3 proj, int cascade,
     return shad;
 }
 /*
-float DoShadowPCF5Tap(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
+float DoShadowPCF5Tap(sampler2DArray shadowSampler, vec3 shadowCoord, int cascade, float depthCmp)
 {
     float fEpsilonX = SHADOW_TEXEL_SIZE;
     float fTwoEpsilonX = 2.0 * fEpsilonX;
@@ -305,7 +341,7 @@ float DoShadowPCF5Tap(sampler2DArrayShadow shadowSampler, vec3 shadowCoord, int 
     return shadow;
 }
 */
-float DoShadowPoissonV1(sampler2DArrayShadow shadowSampler, vec3 proj, int cascade, float depthCmp)
+float DoShadowPoissonV1(sampler2DArray shadowSampler, vec3 proj, int cascade, float depthCmp)
 {
     //float lshad = step(depthCmp, texture(shadowSampler, vec3(proj.xy, cascade)).x);
     //lshad += step(depthCmp, texture(shadowSampler, vec3(proj.xy + vec2(1, 1) * SHADOW_BLUR, cascade)).x);
@@ -342,7 +378,7 @@ float DoShadowPoissonV1(sampler2DArrayShadow shadowSampler, vec3 proj, int casca
     return lshad;
 }
 
-float DoShadowPoissonV2(sampler2DArrayShadow shadowSampler, vec3 proj, int cascade, float depthCmp)
+float DoShadowPoissonV2(sampler2DArray shadowSampler, vec3 proj, int cascade, float depthCmp)
 {
     float lshad = SampleCascade(shadowSampler, proj, depthCmp, cascade, 0);
     lshad += SampleCascade(shadowSampler, proj, depthCmp, cascade, 1);
@@ -376,13 +412,14 @@ int FindCascade(vec4 shadowCoords[PSSM_SPLITS], inout vec3 proj, inout float dep
 		proj = shadowCoords[i].xyz;
 		if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0)
 		{
-			depthCmp = proj.z - DEPTH_BIAS;
+			depthCmp = proj.z;
 			return i;
 		}
 	}
 }
 
-void GetSunShadow(inout float lshad, sampler2DArrayShadow shadowSampler, vec4 shadowCoords[PSSM_SPLITS], float NdotL)
+void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
+                  float NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
 {
 	lshad = 0.0;
 
@@ -402,8 +439,56 @@ void GetSunShadow(inout float lshad, sampler2DArrayShadow shadowSampler, vec4 sh
 	vec3 proj = vec3(0);
 	float depthCmp = 0.0;
 	int cascade = FindCascade(shadowCoords, proj, depthCmp);
+    mat4 mvp = shadowMVPs[cascade];
 
-	lshad = DoShadowGather(shadowSampler, proj, cascade, depthCmp);
+    mat2 rotationMat = mat2(1, 0, 0, 1);
+
+    float filterRadius = FILTER_RADIUS * SHADOW_TEXEL_SIZE;
+
+    //vec2 filterSize = FindFilterSize(mvp, worldPosition, filterRadius);
+    //filterSize *= (1.0 + 10.5 * length(worldPosition - cameraPos) / 100);
+    //filterSize *= 0.0000001;
+    vec2 filterSize = vec2(filterRadius);
+
+    #ifdef DO_PCSS
+        float numBlockers = 0.0;
+        float sumBlockers = 0.0;
+        for (int i = 0; i < 16; i++) {
+            vec2 offset = halton_2D_16[i];
+
+            offset = rotationMat * offset;
+
+            vec4 sampledDepth = textureGather(shadowSampler,
+                vec3(proj.xy + offset * filterSize * 4.0, cascade), 0);
+
+            vec4 factor4 = step(sampledDepth, vec4(depthCmp));
+            float factor = factor4.x + factor4.y + factor4.z + factor4.w;
+            numBlockers += factor;
+            sumBlockers += (sampledDepth.x + sampledDepth.y +
+                sampledDepth.z + sampledDepth.w) * factor;
+        }
+
+        // Examine ratio between blockers and non-blockers
+        float avgBlockerDepth = sumBlockers / numBlockers;
+
+        // Penumbra size also takse average blocker depth into acc
+        float penumbraSize = max(PCSS_MIN_PENUMBRA_SIZE * 0.03, depthCmp - avgBlockerDepth) /
+            depthCmp * PCSS_PENUMBRA_SIZE;
+
+        // Apply penumbra size
+        filterSize *= penumbraSize;
+    #endif
+
+    for (int i = 0; i < 16; i++) {
+        vec2 offset = halton_2D_16[i];
+        lshad += SampleCascadeGather(
+            shadowSampler,
+            vec3(proj.xy + (rotationMat * offset) * filterSize, cascade),
+            depthCmp);
+    }
+    lshad /= 16;
+
+	//lshad = DoShadowGather(shadowSampler, proj, cascade, depthCmp);
 
     //#if SHADER_QUALITY == SHADERQUALITY_HIGH
         //lshad = DoShadowPoisson16Sample(shadowSampler, proj, cascade, depthCmp);
@@ -414,12 +499,12 @@ void GetSunShadow(inout float lshad, sampler2DArrayShadow shadowSampler, vec4 sh
     //#endif
 }
 
-void DoBlendShadow(inout vec3 diffuseLighting, sampler2DArrayShadow shadowSampler,
+void DoBlendShadow(inout vec3 diffuseLighting, sampler2DArray shadowSampler,
                    vec4 shadowCoords[PSSM_SPLITS],
                    vec3 ambientLightIdentifier, vec3 ambientLightMin, float ambientLightScale)
 {
     float shadow = 0.0;
-    GetSunShadow(shadow, shadowSampler, shadowCoords, 0.0);
+    //GetSunShadow(shadow, shadowSampler, shadowCoords, 0.0);
     shadow = 1.0 - shadow;
 
     vec3 lightDelta = diffuseLighting - ambientLightMin;

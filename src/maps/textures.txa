@@ -13,15 +13,15 @@
 # The following line flags all textures to use the most generic image
 # type (e.g. 'rgba' as opposed to 'rgba8') and also turns on
 # mipmapping for all textures ('mipmap').  This enables more textures
-# to be grouped together on the same palettes.  The 'cont' keyword 
+# to be grouped together on the same palettes.  The 'cont' keyword
 # indicates that we should not stop scanning this file for a particular
 # texture just because we matched this first line.
 
-* : generic mipmap cont
+* : generic mipmap srgb cont
 
 Comic.rgb : 256 256
 Humanist.rgb : 256 256
-  
+
 Comic.egg : fonts
 Humanist.egg : fonts
 

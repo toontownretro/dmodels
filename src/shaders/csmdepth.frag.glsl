@@ -13,7 +13,7 @@ uniform sampler2D p3d_Texture0;
 out vec4 p3d_FragColor;
 
 void main() {
-  #ifdef TRANSPARENT
+  #if defined(TRANSPARENT) || defined(ALPHA_TEST)
     float alpha = texture(p3d_Texture0, g_texcoord_alpha.xy).a;
     alpha *= g_texcoord_alpha.z;
 

@@ -33,7 +33,6 @@ void main() {
   // Then multiply by the cascade's view-projection matrix.
   gl_Position = p3d_CascadeMVPs[gl_InstanceID] * worldPos;
 
-  v_texcoord_alpha.xy = texcoord;
-  v_texcoord_alpha.z = p3d_ColorScale.a * p3d_Color.a;
+  v_texcoord_alpha = vec3(texcoord, p3d_ColorScale.a * p3d_Color.a);
   v_instanceID = gl_InstanceID;
 }
