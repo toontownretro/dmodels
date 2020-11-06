@@ -8,6 +8,7 @@
     common_fog_frag.inc.glsl \
     common_frag.inc.glsl \
     common_lighting_frag.inc.glsl \
+    common_sequences.inc.glsl \
     common_shadows_frag.inc.glsl \
     common_shadows_vert.inc.glsl \
     common_vert.inc.glsl \

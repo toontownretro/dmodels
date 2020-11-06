@@ -38,6 +38,7 @@ in vec3 p3d_Normal;
 uniform vec4 p3d_ColorScale;
 in vec4 p3d_Color;
 out vec4 l_vertexColor;
+out vec4 l_colorScale;
 
 #if defined(NEED_WORLD_POSITION) || defined(NEED_WORLD_NORMAL)
     uniform mat4 p3d_ModelMatrix;
@@ -117,13 +118,12 @@ void main()
         l_eyeNormal = vec4(normalize(p3d_NormalMatrix * finalNormal), 0.0);
     #endif
 
-    //vec4 colorScale = p3d_ColorScale;
+    vec4 colorScale = p3d_ColorScale;
     vec4 vertexColor = p3d_Color;
-    //colorScale.xyz = pow(colorScale.xyz, vec3(2.2));
-    vertexColor.xyz = pow(vertexColor.xyz, vec3(2.2));
-    //GammaToLinear(colorScale);
-    //GammaToLinear(vertexColor);
-    l_vertexColor = vertexColor;//vec4(vec3(0.78, 0.54, 0.65) * vec3(0.98, 0.30, 0.25), 1.0);
+    GammaToLinear(colorScale);
+    GammaToLinear(vertexColor);
+    l_vertexColor = vertexColor;
+    l_colorScale = colorScale;
 
     #ifdef NEED_TBN
         l_tangent = vec4(normalize(p3d_NormalMatrix * p3d_Tangent.xyz), 0.0);

@@ -1,245 +1,219 @@
-// This is a HBAO-Shader for OpenGL, based upon nvidias directX implementation
-// supplied in their SampleSDK available from nvidia.com
-// The slides describing the implementation is available at
-// http://www.nvidia.co.uk/object/siggraph-2008-HBAO.html
+#version 330
 
-#version 150
+#extension GL_GOOGLE_include_directive : enable
 
-const float PI = 3.14159265;
+#include "shaders/common_sequences.inc.glsl"
+
+#define M_PI 3.1415926535897932384626433
+#define TWO_PI 6.2831853071795864769252867
+
+uniform vec4 SampleRadius_TangentBias_MaxSampleDistance_AOStrength;
+uniform ivec2 NumAngles_NumRaySteps;
+
+#define sampleRadius (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.x)
+#define tangentBias (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.y)
+#define maxSampleDistance (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.z)
+#define aoStrength (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.w)
+
+#define numAngles (NumAngles_NumRaySteps.x)
+#define numRaySteps (NumAngles_NumRaySteps.y)
+
+//uniform vec4 SampleRadius_MaxDistance_AOStrength_ClipLength;
+//#define sampleRadius (SampleRadius_MaxDistance_AOStrength_ClipLength.x)
+//#define maxDistance (SampleRadius_MaxDistance_AOStrength_ClipLength.y)
+//#define aoStrength (SampleRadius_MaxDistance_AOStrength_ClipLength.z)
+//#define clipLength (SampleRadius_MaxDistance_AOStrength_ClipLength.w)
+uniform vec2 ZBias_ClipLength;
+#define zBias (ZBias_ClipLength.x)
+#define clipLength (ZBias_ClipLength.y)
+
+uniform ivec2 WindowSize;
+
+uniform vec2 NearFar;
+#define NEAR (NearFar.x)
+#define FAR (NearFar.y)
 
 uniform sampler2D depthSampler;
-uniform sampler2D noiseSampler;
+uniform sampler2D normalSampler;
 
-uniform vec4 FocalLen_LinMAD; // LinMAD = vec2(0.1-10.0, 0.1+10.0) / (2.0*0.1*10.0)
-uniform vec4 UVToViewA_B;
+uniform int osg_FrameNumber;
 
-uniform vec4 AORes_Inv;// = vec2(1024.0, 768.0);
-uniform vec3 NoiseScale_TanBias_MaxRadiusPixels;// = vec2(1024.0, 768.0) / 4.0;
-// TanBias = tan(30.0 * PI / 180.0);
-// MaxRadiusPixels = 100.0;
-
-uniform vec4 AOStrength_R_R2_NegInvR2;// = 1.9;
-// R = 0.3;
-// R2 = 0.3*0.3;
-// NegInvR2 = - 1.0 / (0.3*0.3);
-
-uniform ivec2 NumDirections_Samples;// = 6;
-// NumSamples = 4;
+// Inverse projection matrix of scene camera
+uniform mat4 trans_clip_of_camera_to_view_of_camera;
+// Move from world-space to scene camera view space
+uniform mat4 trans_world_to_view_of_camera;
 
 in vec2 l_texcoord;
 
-out vec4 out_frag0;
+out vec4 outputColor;
 
-float ViewSpaceZFromDepth(float d)
-{
-	// [0,1] -> [-1,1] clip space
-	d = d * 2.0 - 1.0;
-
-	// Get view space Z
-	return -1.0 / (FocalLen_LinMAD.z * d + FocalLen_LinMAD.w);
+vec3 GetViewNormal(vec2 texcoord) {
+  vec3 worldNormal = normalize(textureLod(normalSampler, texcoord, 0).xyz * 2 - 1);
+  vec4 viewNormal = trans_world_to_view_of_camera * vec4(worldNormal, 0);
+  return normalize(viewNormal.xyz);
 }
 
-vec3 UVToViewSpace(vec2 uv, float z)
-{
-	uv = UVToViewA_B.xy * uv + UVToViewA_B.zw;
-	return vec3(uv * z, z);
+vec3 GetViewPos(float z, vec2 texcoord) {
+  vec4 viewPos = trans_clip_of_camera_to_view_of_camera * vec4((texcoord.xy * 2) - 1, z, 1.0);
+  return viewPos.xyz / viewPos.w;
 }
 
-vec3 GetViewPos(vec2 uv)
-{
-	float z = ViewSpaceZFromDepth(texture(depthSampler, uv).r);
-	//float z = texture(depthSampler, uv).r;
-	return UVToViewSpace(uv, z);
+vec3 GetViewPos(vec2 texcoord) {
+  float z = textureLod(depthSampler, texcoord, 0).x;
+  return GetViewPos(z, texcoord);
 }
 
-vec3 GetViewPosPoint(ivec2 uv)
-{
-	ivec2 coord = ivec2(gl_FragCoord.xy) + uv;
-	float z = texelFetch(depthSampler, coord, 0).r;
-	return UVToViewSpace(uv, z);
+float GetLinearZ(float z) {
+  return 2.0 * NEAR * FAR / (FAR + NEAR - (z * 2.0 - 1) * (FAR - NEAR));
 }
 
-float TanToSin(float x)
+vec3 RandRGB(vec2 co)
 {
-	return x * inversesqrt(x*x + 1.0);
+    return abs(fract(sin(dot(co.xy, vec2(34.4835, 89.6372))) *
+        vec3(29156.4765, 38273.56393, 47843.75468))) * 2 - 1;
 }
 
-float InvLength(vec2 V)
-{
-	return inversesqrt(dot(V,V));
-}
+void main() {
+  vec2 screenSize = vec2(WindowSize.x, WindowSize.y);
+  vec2 pixelSize = vec2(1.0) / screenSize;
 
-float Tangent(vec3 V)
-{
-	return V.z * InvLength(V.xy);
-}
+  ivec2 coord = ivec2(gl_FragCoord.xy) * 2;
+  //vec2 texcoord = (coord + 0.5) / screenSize;
+  vec2 texcoord = l_texcoord;
 
-float BiasedTangent(vec3 V)
-{
-	return V.z * InvLength(V.xy) + NoiseScale_TanBias_MaxRadiusPixels.y;
-}
+  float pixelDepth = textureLod(depthSampler, texcoord, 0).x;
+  float pixelDistance = GetLinearZ(pixelDepth);
 
-float Tangent(vec3 P, vec3 S)
-{
-    return -(P.z - S.z) * InvLength(S.xy - P.xy);
-}
+  if (pixelDistance > 1000.0) {
+    outputColor = vec4(1);
+    return;
+  }
 
-float Length2(vec3 V)
-{
-	return dot(V,V);
-}
+  vec3 pixelViewNormal = GetViewNormal(texcoord);
 
-vec3 MinDiff(vec3 P, vec3 Pr, vec3 Pl)
-{
-    vec3 V1 = Pr - P;
-    vec3 V2 = P - Pl;
-    return (Length2(V1) < Length2(V2)) ? V1 : V2;
-}
+  vec3 pixelViewPos = GetViewPos(pixelDepth, texcoord);
 
-vec2 SnapUVOffset(vec2 uv)
-{
-    return round(uv * AORes_Inv.xy) * AORes_Inv.zw;
-}
+  float kernelScale = min(5.0, 10.0 / pixelDistance);
 
-float Falloff(float d2)
-{
-	return d2 * AOStrength_R_R2_NegInvR2.w + 1.0f;
-}
+  vec3 noiseVec = RandRGB(coord % 8 + 0.05 * (osg_FrameNumber % int(clipLength)));
 
-float HorizonOcclusion(	vec2 deltaUV,
-						vec3 P,
-						vec3 dPdu,
-						vec3 dPdv,
-						float randstep,
-						float numSamples)
-{
-	float ao = 0;
+#if 0
+  float accum = 0.0;
+  float accumCount = 0;
+  vec2 offsetScale = pixelSize * sampleRadius * kernelScale * 0.4;
 
-	// Offset the first coord with some noise
-	vec2 uv = l_texcoord + SnapUVOffset(randstep*deltaUV);
-	deltaUV = SnapUVOffset( deltaUV );
+  for (int i = 0; i < 64; i++) {
+    vec2 offset = halton_2D_64[i];
+    offset = mix(offset, noiseVec.xy, 0.3);
 
-	// Calculate the tangent vector
-	vec3 T = deltaUV.x * dPdu + deltaUV.y * dPdv;
+    vec2 offcoord = offset * offsetScale;
 
-	// Get the angle of the tangent vector from the viewspace axis
-	float tanH = BiasedTangent(T);
-	float sinH = TanToSin(tanH);
+    // Get offset coordinates
+    vec2 texcA = texcoord + offcoord;
+    vec2 texcB = texcoord - offcoord;
 
-	float tanS;
-	float d2;
-	vec3 S;
+    // Get view position at those offsets.  Offset the positions along the
+    // normal to prevent acne.
+    vec3 offPosA = GetViewPos(texcA);
+    offPosA.y += zBias;
+    //vec3 offNormA = GetViewNormal(texcA);
+    //offPosA -= offNormA * zBias;
+    vec3 offPosB = GetViewPos(texcB);
+    offPosB.y += zBias;
+    //vec3 offNormB = GetViewNormal(texcB);
+    //offPosB -= offNormB * zBias;
 
-	// Sample to find the maximum angle
-	for(float s = 1; s <= numSamples; ++s)
-	{
-		uv += deltaUV;
-		S = GetViewPos(uv);
-		tanS = Tangent(P, S);
-		d2 = Length2(S - P);
+    // Get the vector s-p to that sample position
+    vec3 sampleVecA = normalize(offPosA - pixelViewPos);
+    vec3 sampleVecB = normalize(offPosB - pixelViewPos);
 
-		// Is the sample within the radius and the angle greater?
-		if(d2 < AOStrength_R_R2_NegInvR2.z && tanS > tanH)
-		{
-			float sinS = TanToSin(tanS);
-			// Apply falloff based on the distance
-			ao += Falloff(d2) * (sinS - sinH);
+    // Get distances
+    float distA = distance(offPosA, pixelViewPos) / maxDistance;
+    float distB = distance(offPosB, pixelViewPos) / maxDistance;
 
-			tanH = tanS;
-			sinH = sinS;
-		}
-	}
-	
-	return ao;
-}
+    // Check if samples are valid
+    float validA = step(distA - 1, 0.0);
+    float validB = step(distB - 1, 0.0);
 
-vec2 RotateDirections(vec2 Dir, vec2 CosSin)
-{
-    return vec2(Dir.x*CosSin.x - Dir.y*CosSin.y,
-                  Dir.x*CosSin.y + Dir.y*CosSin.x);
-}
+    float angleA = max(0, dot(sampleVecA, pixelViewNormal));
+    float angleB = max(0, dot(sampleVecB, pixelViewNormal));
 
-void ComputeSteps(inout vec2 stepSizeUv, inout float numSteps, float rayRadiusPix, float rand)
-{
-    // Avoid oversampling if numSteps is greater than the kernel radius in pixels
-    numSteps = min(NumDirections_Samples.y, rayRadiusPix);
-
-    // Divide by Ns+1 so that the farthest samples are not fully attenuated
-    float stepSizePix = rayRadiusPix / (numSteps + 1);
-
-    // Clamp numSteps if it is greater than the max kernel footprint
-    float maxNumSteps = NoiseScale_TanBias_MaxRadiusPixels.z / stepSizePix;
-    if (maxNumSteps < numSteps)
-    {
-        // Use dithering to avoid AO discontinuities
-        numSteps = floor(maxNumSteps + rand);
-        numSteps = max(numSteps, 1);
-        stepSizePix = NoiseScale_TanBias_MaxRadiusPixels.z / numSteps;
+    if (validA != validB) {
+      angleA = mix(-angleB, angleA, validA);
+      angleB = mix(angleA, -angleB, validB);
+      distA = mix(distB, distA, validA);
+      distB = mix(distA, distB, validB);
     }
 
-    // Step size in uv space
-    stepSizeUv = stepSizePix * AORes_Inv.zw;
-}
+    // In case any sample is valid
+    if (validA > 0.5 || validB > 0.5) {
+      accum += (angleA + angleB) * 0.25 * (2 - (distA + distB));
+      accumCount += 1.0;
+    } else {
+      accumCount += 0.5;
+    }
+  }
 
-void main(void)
-{
-	float numDirections = NumDirections_Samples.x;
+  accum /= max(1.0, accumCount);
+  accum = 1 - accum;
 
-	vec3 P, Pr, Pl, Pt, Pb;
-	P 	= GetViewPos(l_texcoord);
+#endif
 
-	// Sample neighboring pixels
-    Pr 	= GetViewPos(l_texcoord + vec2( AORes_Inv.z, 0));
-    Pl 	= GetViewPos(l_texcoord + vec2(-AORes_Inv.z, 0));
-    Pt 	= GetViewPos(l_texcoord + vec2( 0, AORes_Inv.w));
-    Pb 	= GetViewPos(l_texcoord + vec2( 0,-AORes_Inv.w));
+#if 1
+  float accum = 0.0;
 
-    // Calculate tangent basis vectors using the minimu difference
-    vec3 dPdu = MinDiff(P, Pr, Pl);
-    vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes_Inv.y * AORes_Inv.z);
+  for (int i = 0; i < numAngles; i++) {
+    float angle = (i /*+ 2 * noiseVec.x*/) / float(numAngles) * TWO_PI;
 
-    // Get the random samples from the noise texture
-	vec3 random = texture(noiseSampler, l_texcoord.xy * NoiseScale_TanBias_MaxRadiusPixels.x).rgb;
+    vec2 sampleDir = vec2(cos(angle), sin(angle));
 
-	// Calculate the projected size of the hemisphere
-    vec2 rayRadiusUV = 0.5 * AOStrength_R_R2_NegInvR2.y * FocalLen_LinMAD.xy / -P.z;
-    float rayRadiusPix = rayRadiusUV.x * AORes_Inv.x;
+    // Find the tangent angle
+    float tangentAngle = acos(dot(vec3(sampleDir, 0), pixelViewNormal)) - 0.5 * M_PI
+      + tangentBias;
 
-    float ao = 1.0;
+    // Assume the horizon angle is the same as the tangent angle at the
+    // beginning of the ray.
+    float horizonAngle = tangentAngle;
 
-    // Make sure the radius of the evaluated hemisphere is more than a pixel
-    if(rayRadiusPix > 1.0)
-    {
-    	ao = 0.0;
-    	float numSteps;
-    	vec2 stepSizeUV;
+    vec3 lastDiff = vec3(0);
 
-    	// Compute the number of steps
-    	ComputeSteps(stepSizeUV, numSteps, rayRadiusPix, random.z);
+    // Ray-march in the sample direction.
+    for (int k = 0; k < numRaySteps; k++) {
+      // Get the new texture coordinate.
+      vec2 texc = texcoord + sampleDir * (k + 2.0 /*+ 2 * noiseVec.y*/) /
+        numRaySteps * pixelSize * sampleRadius * kernelScale * 0.3;
 
-		float alpha = 2.0 * PI / numDirections;
+      // Fetch view pos at that position and compare it.
+      vec3 viewPos = GetViewPos(texc);
+      viewPos.y += zBias;
+      vec3 diff = viewPos - pixelViewPos;
 
-		// Calculate the horizon occlusion of each direction
-		for(float d = 0; d < numDirections; ++d)
-		{
-			float theta = alpha * d;
+      if (length(diff) < maxSampleDistance) {
 
-			// Apply noise to the direction
-			vec2 dir = RotateDirections(vec2(cos(theta), sin(theta)), random.xy);
-			vec2 deltaUV = dir * stepSizeUV;
+        // Compute actual angle
+        float sampleAngle = atan(diff.z / length(diff.xy));
 
-			// Sample the pixels along the direction
-			ao += HorizonOcclusion(	deltaUV,
-									P,
-									dPdu,
-									dPdv,
-									random.z,
-									numSteps);
-		}
+        // Correct horizon angle
+        horizonAngle = max(horizonAngle, sampleAngle);
+        lastDiff = diff;
+      }
+    }
 
-		// Average the results and produce the final AO
-		ao = 1.0 - ao / numDirections * AOStrength_R_R2_NegInvR2.x;
-	}
+    // Now that we know the average horizon angle, add it to the result.  For
+    // that we simply take the angle difference.
+    float occlusion = clamp(sin(horizonAngle) - sin(tangentAngle), 0, 1);
+    occlusion *= 1.0 / (1 + length(lastDiff));
+    accum += occlusion;
+  }
 
-	out_frag0 = vec4(ao, 30.0 * P.z, 0, 0);
+  // Normalize angles
+  accum /= numAngles;
+  accum = 1 - accum;
+
+#endif
+
+  outputColor = vec4(accum, accum, accum, 1.0);
+
+  outputColor.rgb = pow(clamp(outputColor.rgb, 0, 1), vec3(aoStrength));
+  outputColor.rgb = pow(outputColor.rgb, vec3(3.0));
 }

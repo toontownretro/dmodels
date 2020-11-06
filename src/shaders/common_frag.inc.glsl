@@ -13,9 +13,15 @@
 
 #include "shaders/common.inc.glsl"
 
-#ifdef HDR
-uniform float _exposureAdjustment[1];
-#endif
+//#ifdef HDR
+//uniform float p3d_ExposureScale;
+//#endif
+
+// Define useful preset color attachment locations.
+#define COLOR_LOCATION 0
+#define AUX_NORMAL_LOCATION 1
+#define AUX_ARME_LOCATION 2
+#define AUX_BLOOM_LOCATION 3
 
 bool AlphaTest(float alpha)
 {
@@ -53,13 +59,9 @@ bool ClipPlaneTest(vec4 position, vec4 clipPlane)
 
 void FinalOutput(inout vec4 color)
 {
-    #ifdef HDR
-	#ifndef BLEND_MODULATE // tone mapping a DecalModulate doesn't work
-	    color.rgb *= _exposureAdjustment[0];
-	#endif
-    #else
-	color.rgb = clamp(color.rgb, 0, 1);
-    #endif
+//#ifndef HDR
+//	color.rgb = clamp(color.rgb, 0, 1);
+//#endif
 }
 
 #endif // COMMON_FRAG_INC_GLSL

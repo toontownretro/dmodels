@@ -112,6 +112,7 @@ in vec4 l_texcoord;
 #endif
 
 in vec4 l_vertexColor;
+in vec4 l_colorScale;
 
 #if NUM_CLIP_PLANES > 0
 uniform vec4 p3d_ClipPlane[NUM_CLIP_PLANES];
@@ -158,17 +159,17 @@ uniform vec4 p3d_ColorScale;
 
 uniform vec4 p3d_TexAlphaOnly;
 
-out vec4 outputColor;
+layout(location = COLOR_LOCATION) out vec4 outputColor;
 
 // Auxilliary bitplanes for deferred passes
 #ifdef NEED_AUX_NORMAL
-    layout(location = 1) out vec4 o_aux_normal;
+    layout(location = AUX_NORMAL_LOCATION) out vec4 o_aux_normal;
 #endif
 #ifdef NEED_AUX_ARME
-    layout(location = 2) out vec4 o_aux_arme;
+    layout(location = AUX_ARME_LOCATION) out vec4 o_aux_arme;
 #endif
 #ifdef NEED_AUX_BLOOM
-    layout(location = 3) out vec4 o_aux_bloom;
+    layout(location = AUX_BLOOM_LOCATION) out vec4 o_aux_bloom;
 #endif
 
 void main()
@@ -189,6 +190,7 @@ void main()
     albedo += p3d_TexAlphaOnly;
     // Modulate albedo with vertex/flat colors
     albedo *= l_vertexColor;
+    albedo *= l_colorScale;
     // Explicit alpha value from material.
     #ifdef ALPHA
         albedo.a *= ALPHA;
@@ -201,9 +203,9 @@ void main()
         }
     #endif
 
-    vec4 colorScale = p3d_ColorScale;
-    colorScale.xyz = pow(colorScale.xyz, vec3(2.2));
-    albedo *= colorScale;
+    //vec4 colorScale = p3d_ColorScale;
+    //colorScale.xyz = pow(colorScale.xyz, vec3(2.2));
+    //albedo *= colorScale;
 
     #ifdef NEED_EYE_NORMAL
         vec4 finalEyeNormal = normalize(l_eyeNormal);
@@ -248,12 +250,12 @@ void main()
     /////////////////////////////////////////////////////
     // Aux bitplane outputs
     #ifdef NEED_AUX_NORMAL
-        #ifdef ENVMAP
-            int hasEnvmap = 1;
-        #else
-            int hasEnvmap = 0;
-        #endif
-        o_aux_normal = vec4((finalWorldNormal.xyz * 0.5) + 0.5, hasEnvmap);
+        //#ifdef ENVMAP
+        //    int hasEnvmap = 1;
+        //#else
+        //    int hasEnvmap = 0;
+        //#endif
+        o_aux_normal = vec4((finalWorldNormal.xyz * 0.5) + 0.5, 1);
     #endif
     #ifdef NEED_AUX_ARME
         o_aux_arme = armeParams;
@@ -282,6 +284,13 @@ void main()
         #else
             ambientDiffuse += p3d_LightModel.ambient.rgb;
         #endif
+
+        // Multiply the ambient level by the exposure scale.  I don't know if
+        // this makes much sense physically, but it works to only apply
+        // exposure scaling onto materials that use lighting.
+        //#ifdef HDR
+        //    ambientDiffuse *= p3d_ExposureScale;
+        //#endif
 
         #ifdef RIMLIGHT
             // Dedicated rim lighting for this pixel,

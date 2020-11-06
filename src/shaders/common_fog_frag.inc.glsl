@@ -11,6 +11,8 @@
 #ifndef COMMON_FOG_FRAG_INC_GLSL
 #define COMMON_FOG_FRAG_INC_GLSL
 
+#include "common.inc.glsl"
+
 #ifdef FOG
 
 #define FOG_LINEAR 				0
@@ -50,6 +52,7 @@ void ApplyFog(inout vec4 result, vec4 eyePos)
 		vec4 fogColor = vec4(0, 0, 0, 1.0);
 	#else
 		vec4 fogColor = p3d_Fog.color;
+		GammaToLinear(fogColor);
 	#endif
 
 	#if FOG == FOG_EXPONENTIAL
