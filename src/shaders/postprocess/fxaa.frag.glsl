@@ -25,7 +25,7 @@ vec3 FxaaPixelShader(
     vec3 rgbSE = FxaaTexOff(tex, posPos.zw, FxaaInt2(1,1), rcpFrame.xy).xyz;
     vec3 rgbM  = FxaaTexLod0(tex, posPos.xy).xyz;
 /*---------------------------------------------------------*/
-    vec3 luma = vec3(0.299, 0.587, 0.114);
+    vec3 luma = vec3(0.2126, 0.7152, 0.0722);
     float lumaNW = dot(rgbNW, luma);
     float lumaNE = dot(rgbNE, luma);
     float lumaSW = dot(rgbSW, luma);

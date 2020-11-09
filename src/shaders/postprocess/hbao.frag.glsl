@@ -7,41 +7,25 @@
 #define M_PI 3.1415926535897932384626433
 #define TWO_PI 6.2831853071795864769252867
 
-uniform vec4 SampleRadius_TangentBias_MaxSampleDistance_AOStrength;
-uniform ivec2 NumAngles_NumRaySteps;
+uniform vec4 SampleRadius_MaxDistance_AOStrength_ZBias;
+#define sampleRadius (SampleRadius_MaxDistance_AOStrength_ZBias.x)
+#define maxDistance (SampleRadius_MaxDistance_AOStrength_ZBias.y)
+#define aoStrength (SampleRadius_MaxDistance_AOStrength_ZBias.z)
+#define zBias (SampleRadius_MaxDistance_AOStrength_ZBias.w)
 
-#define sampleRadius (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.x)
-#define tangentBias (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.y)
-#define maxSampleDistance (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.z)
-#define aoStrength (SampleRadius_TangentBias_MaxSampleDistance_AOStrength.w)
+uniform vec4 Near_Far_NoiseScale;
+#define NEAR (Near_Far_NoiseScale.x)
+#define FAR (Near_Far_NoiseScale.y)
+#define noiseScale (Near_Far_NoiseScale.zw)
 
-#define numAngles (NumAngles_NumRaySteps.x)
-#define numRaySteps (NumAngles_NumRaySteps.y)
+uniform vec2 pixelSize;
 
-//uniform vec4 SampleRadius_MaxDistance_AOStrength_ClipLength;
-//#define sampleRadius (SampleRadius_MaxDistance_AOStrength_ClipLength.x)
-//#define maxDistance (SampleRadius_MaxDistance_AOStrength_ClipLength.y)
-//#define aoStrength (SampleRadius_MaxDistance_AOStrength_ClipLength.z)
-//#define clipLength (SampleRadius_MaxDistance_AOStrength_ClipLength.w)
-uniform vec2 ZBias_ClipLength;
-#define zBias (ZBias_ClipLength.x)
-#define clipLength (ZBias_ClipLength.y)
-
-uniform ivec2 WindowSize;
-
-uniform vec2 NearFar;
-#define NEAR (NearFar.x)
-#define FAR (NearFar.y)
+uniform mat4 trans_clip_of_camera_to_view_of_camera;
+uniform mat4 trans_world_to_view_of_camera;
 
 uniform sampler2D depthSampler;
 uniform sampler2D normalSampler;
-
-uniform int osg_FrameNumber;
-
-// Inverse projection matrix of scene camera
-uniform mat4 trans_clip_of_camera_to_view_of_camera;
-// Move from world-space to scene camera view space
-uniform mat4 trans_world_to_view_of_camera;
+uniform sampler2D noiseSampler;
 
 in vec2 l_texcoord;
 
@@ -67,18 +51,7 @@ float GetLinearZ(float z) {
   return 2.0 * NEAR * FAR / (FAR + NEAR - (z * 2.0 - 1) * (FAR - NEAR));
 }
 
-vec3 RandRGB(vec2 co)
-{
-    return abs(fract(sin(dot(co.xy, vec2(34.4835, 89.6372))) *
-        vec3(29156.4765, 38273.56393, 47843.75468))) * 2 - 1;
-}
-
 void main() {
-  vec2 screenSize = vec2(WindowSize.x, WindowSize.y);
-  vec2 pixelSize = vec2(1.0) / screenSize;
-
-  ivec2 coord = ivec2(gl_FragCoord.xy) * 2;
-  //vec2 texcoord = (coord + 0.5) / screenSize;
   vec2 texcoord = l_texcoord;
 
   float pixelDepth = textureLod(depthSampler, texcoord, 0).x;
@@ -95,16 +68,15 @@ void main() {
 
   float kernelScale = min(5.0, 10.0 / pixelDistance);
 
-  vec3 noiseVec = RandRGB(coord % 8 + 0.05 * (osg_FrameNumber % int(clipLength)));
+  vec2 noiseVec = textureLod(noiseSampler, texcoord * noiseScale, 0).xy * 2 - 1;
 
-#if 0
   float accum = 0.0;
   float accumCount = 0;
   vec2 offsetScale = pixelSize * sampleRadius * kernelScale * 0.4;
 
-  for (int i = 0; i < 64; i++) {
-    vec2 offset = halton_2D_64[i];
-    offset = mix(offset, noiseVec.xy, 0.3);
+  for (int i = 0; i < 8; i++) {
+    vec2 offset = halton_2D_8[i];
+    offset = mix(offset, noiseVec, 0.3);
 
     vec2 offcoord = offset * offsetScale;
 
@@ -112,16 +84,11 @@ void main() {
     vec2 texcA = texcoord + offcoord;
     vec2 texcB = texcoord - offcoord;
 
-    // Get view position at those offsets.  Offset the positions along the
-    // normal to prevent acne.
+    // Get view position at those offsets.
     vec3 offPosA = GetViewPos(texcA);
     offPosA.y += zBias;
-    //vec3 offNormA = GetViewNormal(texcA);
-    //offPosA -= offNormA * zBias;
     vec3 offPosB = GetViewPos(texcB);
     offPosB.y += zBias;
-    //vec3 offNormB = GetViewNormal(texcB);
-    //offPosB -= offNormB * zBias;
 
     // Get the vector s-p to that sample position
     vec3 sampleVecA = normalize(offPosA - pixelViewPos);
@@ -146,71 +113,13 @@ void main() {
     }
 
     // In case any sample is valid
-    if (validA > 0.5 || validB > 0.5) {
-      accum += (angleA + angleB) * 0.25 * (2 - (distA + distB));
-      accumCount += 1.0;
-    } else {
-      accumCount += 0.5;
-    }
+    float anyValid = float((validA > 0.5) || (validB > 0.5));
+    accum += ((angleA + angleB) * 0.25 * (2 - (distA + distB))) * anyValid;
+    accumCount += max(0.5, anyValid);
   }
 
   accum /= max(1.0, accumCount);
   accum = 1 - accum;
-
-#endif
-
-#if 1
-  float accum = 0.0;
-
-  for (int i = 0; i < numAngles; i++) {
-    float angle = (i /*+ 2 * noiseVec.x*/) / float(numAngles) * TWO_PI;
-
-    vec2 sampleDir = vec2(cos(angle), sin(angle));
-
-    // Find the tangent angle
-    float tangentAngle = acos(dot(vec3(sampleDir, 0), pixelViewNormal)) - 0.5 * M_PI
-      + tangentBias;
-
-    // Assume the horizon angle is the same as the tangent angle at the
-    // beginning of the ray.
-    float horizonAngle = tangentAngle;
-
-    vec3 lastDiff = vec3(0);
-
-    // Ray-march in the sample direction.
-    for (int k = 0; k < numRaySteps; k++) {
-      // Get the new texture coordinate.
-      vec2 texc = texcoord + sampleDir * (k + 2.0 /*+ 2 * noiseVec.y*/) /
-        numRaySteps * pixelSize * sampleRadius * kernelScale * 0.3;
-
-      // Fetch view pos at that position and compare it.
-      vec3 viewPos = GetViewPos(texc);
-      viewPos.y += zBias;
-      vec3 diff = viewPos - pixelViewPos;
-
-      if (length(diff) < maxSampleDistance) {
-
-        // Compute actual angle
-        float sampleAngle = atan(diff.z / length(diff.xy));
-
-        // Correct horizon angle
-        horizonAngle = max(horizonAngle, sampleAngle);
-        lastDiff = diff;
-      }
-    }
-
-    // Now that we know the average horizon angle, add it to the result.  For
-    // that we simply take the angle difference.
-    float occlusion = clamp(sin(horizonAngle) - sin(tangentAngle), 0, 1);
-    occlusion *= 1.0 / (1 + length(lastDiff));
-    accum += occlusion;
-  }
-
-  // Normalize angles
-  accum /= numAngles;
-  accum = 1 - accum;
-
-#endif
 
   outputColor = vec4(accum, accum, accum, 1.0);
 

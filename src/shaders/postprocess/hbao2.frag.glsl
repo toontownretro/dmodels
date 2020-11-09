@@ -8,11 +8,14 @@ uniform vec4 SampleDirections_SampleSteps_NoiseScale;
 #define numSampleSteps (SampleDirections_SampleSteps_NoiseScale.y)
 #define noiseScale (SampleDirections_SampleSteps_NoiseScale.z)
 
-uniform vec4 FOV_SampleRadius_AngleBias_Intensity;
-#define fov (FOV_SampleRadius_AngleBias_Intensity.x)
-#define sampleRadius (FOV_SampleRadius_AngleBias_Intensity.y)
-#define angleBias (FOV_SampleRadius_AngleBias_Intensity.z)
-#define intensity (FOV_SampleRadius_AngleBias_Intensity.w)
+uniform vec4 FallOff_SampleRadius_AngleBias_Intensity;
+#define fallOff (FallOff_SampleRadius_AngleBias_Intensity.x)
+#define sampleRadius (FallOff_SampleRadius_AngleBias_Intensity.y)
+#define angleBias (FallOff_SampleRadius_AngleBias_Intensity.z)
+#define intensity (FallOff_SampleRadius_AngleBias_Intensity.w)
+
+uniform vec2 MaxSampleDistance;
+#define maxSampleDistance (MaxSampleDistance.x)
 
 uniform sampler2D depthSampler;
 uniform sampler2D normalSampler;
@@ -22,8 +25,8 @@ uniform sampler2D noiseSampler;
 uniform mat4 trans_clip_of_camera_to_view_of_camera;
 // Move from world-space to scene camera view space
 uniform mat4 trans_world_to_view_of_camera;
-// Move from scene camera clip space to world space.
-uniform mat4 trans_clip_of_camera_to_world;
+// Move from scene camera view space to scene-camera clip space.
+uniform mat4 trans_view_of_camera_to_clip_of_camera;
 
 in vec2 l_texcoord;
 
@@ -49,22 +52,17 @@ void main() {
   vec3 viewOrigin = GetViewPos(l_texcoord);
   vec3 viewNormal = GetViewNormal(l_texcoord);
 
-  // Radius of influence in screen space.
-  float screenRadius = 0.0;
-  // Radius of influence in world space.
-  float worldRadius = 0.0;
+  float viewRadius = sampleRadius;
 
-  screenRadius = sampleRadius;
-  vec4 temp0 = trans_clip_of_camera_to_world * vec4(0.0, 1, 0, 1.0);
-  vec3 out0 = temp0.xyz;
-  vec4 temp1 = trans_clip_of_camera_to_world * vec4(screenRadius, 1, 0, 1.0);
-  vec3 out1 = temp1.xyz;
+  // Convert view-space radius parameter to a UV-space radius.
+  vec4 screenRadiusVec = trans_view_of_camera_to_clip_of_camera *
+    vec4(viewRadius, viewOrigin.y, viewRadius, 1.0);
+  // Perspective divide to have a lower UV-space radius the further away the
+  // pixel is.
+  float screenRadius = screenRadiusVec.x / screenRadiusVec.w;
 
-  // Clamp world space radius based on screen space radius projection to avoid
-  // artifacts.
-  //worldRadius = min(tan(screenRadius * fov / 2.0) * viewOrigin.y / 2.0, length(out1 - out0));
-  //worldRadius = 20;
-  worldRadius = length(out1 - out0);
+  //outputColor =  vec4(screenRadius, 1, 1);
+  //return;
 
   float theta = TWO_PI / numSampleDirections;
   float cosTheta = cos(theta);
@@ -76,7 +74,7 @@ void main() {
   // Step vector in view space.
   vec2 deltaUV = vec2(1.0, 0.0) * (screenRadius / (numSampleDirections * numSampleSteps + 1.0));
 
-  vec3 sampleNoise = textureLod(noiseSampler, l_texcoord, 0).xyz * noiseScale;
+  vec3 sampleNoise = textureLod(noiseSampler, l_texcoord * noiseScale, 0).xyz;
   sampleNoise.xy = sampleNoise.xy * 2.0 - vec2(1.0);
   mat2 rotateMat = mat2(sampleNoise.x, -sampleNoise.y, sampleNoise.y, sampleNoise.x);
 
@@ -97,14 +95,17 @@ void main() {
       vec2 sampleUV = l_texcoord + (jitter + float(j)) * sampleDirUV;
       vec3 viewSample = GetViewPos(sampleUV);
       vec3 viewSampleDir = (viewSample - viewOrigin);
+      float sampleDistance = length(viewSampleDir);
 
       // Angle between fragment tangent and the sample
-      float gamma = (M_PI / 2.0) - acos(dot(viewNormal, normalize(viewSampleDir)));
+      float gamma = (M_PI / 2.0) - acos(dot(viewNormal, viewSampleDir / sampleDistance));
 
-      if (gamma > oldAngle) {
+      if (gamma > oldAngle && sampleDistance <= maxSampleDistance) {
         float value = sin(gamma) - sin(oldAngle);
 
-        float atten = clamp(1.0 - pow(length(viewSampleDir) / worldRadius, 2.0), 0.0, 1.0);
+        // Distance falloff
+        float atten = clamp(1.0 / (fallOff * sampleDistance * sampleDistance), 0, 1);
+        //atten = 1.0 - atten;
         occlusion += atten * value;
 
         oldAngle = gamma;
