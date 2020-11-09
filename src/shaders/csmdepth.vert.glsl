@@ -20,6 +20,7 @@ in vec2 texcoord;
 
 out vec3 v_texcoord_alpha;
 out int v_instanceID;
+out vec4 v_worldPosition;
 
 void main() {
   vec4 finalVertex = p3d_Vertex;
@@ -35,4 +36,5 @@ void main() {
 
   v_texcoord_alpha = vec3(texcoord, p3d_ColorScale.a * p3d_Color.a);
   v_instanceID = gl_InstanceID;
+  v_worldPosition = worldPos;
 }

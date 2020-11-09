@@ -114,8 +114,8 @@ in vec4 l_texcoord;
 in vec4 l_vertexColor;
 in vec4 l_colorScale;
 
-#if NUM_CLIP_PLANES > 0
-uniform vec4 p3d_ClipPlane[NUM_CLIP_PLANES];
+#if defined(NUM_CLIP_PLANES) && NUM_CLIP_PLANES > 0
+uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];
 #endif
 
 uniform vec4 p3d_ColorScale;
@@ -175,10 +175,10 @@ layout(location = COLOR_LOCATION) out vec4 outputColor;
 void main()
 {
     // Clipping first!
-    #if NUM_CLIP_PLANES > 0
+    #if defined(NUM_CLIP_PLANES) && NUM_CLIP_PLANES > 0
         for (int i = 0; i < NUM_CLIP_PLANES; i++)
         {
-            if (!ClipPlaneTest(l_eyePosition, p3d_ClipPlane[i]))
+            if (!ClipPlaneTest(l_worldPosition, p3d_WorldClipPlane[i]))
             {
                 // pixel outside of clip plane interiors
                 discard;
