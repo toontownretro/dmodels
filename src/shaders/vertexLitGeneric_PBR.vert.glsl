@@ -1,4 +1,4 @@
-#version 330
+#version 430
 
 /**
  * COG INVASION ONLINE
@@ -38,7 +38,6 @@ in vec3 p3d_Normal;
 uniform vec4 p3d_ColorScale;
 in vec4 p3d_Color;
 out vec4 l_vertexColor;
-out vec4 l_colorScale;
 
 #if defined(NEED_WORLD_POSITION) || defined(NEED_WORLD_NORMAL)
     uniform mat4 p3d_ModelMatrix;
@@ -85,6 +84,18 @@ out vec4 l_texcoord;
     out vec4 l_pssmCoords[PSSM_SPLITS];
 #endif
 
+#ifdef PLANAR_REFLECTION
+    out vec4 l_texcoordReflection;
+    const mat4 scale_mat = mat4(vec4(0.5, 0.0, 0.0, 0.0),
+                                vec4(0.0, 0.5, 0.0, 0.0),
+                                vec4(0.0, 0.0, 0.5, 0.0),
+                                vec4(0.5, 0.5, 0.5, 1.0));
+#endif
+
+#if NUM_TEXTURES > 0
+uniform mat4 p3d_TextureTransform[NUM_TEXTURES];
+#endif
+
 void main()
 {
 	vec4 finalVertex = p3d_Vertex;
@@ -97,7 +108,11 @@ void main()
 	gl_Position = p3d_ModelViewProjectionMatrix * finalVertex;
 
     // pass through the texcoord input as-is
-    l_texcoord = texcoord;
+    #ifdef BASETEXTURE_INDEX
+        l_texcoord = p3d_TextureTransform[BASETEXTURE_INDEX] * texcoord;
+    #else
+        l_texcoord = texcoord;
+    #endif
 
     #if defined(NEED_WORLD_POSITION)
         l_worldPosition = p3d_ModelMatrix * finalVertex;
@@ -122,8 +137,7 @@ void main()
     vec4 vertexColor = p3d_Color;
     GammaToLinear(colorScale);
     GammaToLinear(vertexColor);
-    l_vertexColor = vertexColor;
-    l_colorScale = colorScale;
+    l_vertexColor = vertexColor * colorScale;
 
     #ifdef NEED_TBN
         l_tangent = vec4(normalize(p3d_NormalMatrix * p3d_Tangent.xyz), 0.0);
@@ -142,5 +156,9 @@ void main()
 
     #ifdef STATIC_PROP_LIGHTING
         l_staticVertexLighting = static_vertex_lighting;
+    #endif
+
+    #ifdef PLANAR_REFLECTION
+        l_texcoordReflection = scale_mat * gl_Position;
     #endif
 }

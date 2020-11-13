@@ -13,7 +13,9 @@ in vec4 g_worldPosition;
 uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];
 #endif
 
-uniform sampler2D p3d_Texture0;
+#ifdef BASETEXTURE
+uniform sampler2D baseTextureSampler;
+#endif
 
 out vec4 p3d_FragColor;
 
@@ -29,8 +31,12 @@ void main() {
   #endif
 
   #if defined(TRANSPARENT) || defined(ALPHA_TEST)
-    float alpha = texture(p3d_Texture0, g_texcoord_alpha.xy).a;
-    alpha *= g_texcoord_alpha.z;
+    #ifdef BASETEXTURE
+      float alpha = texture(baseTextureSampler, g_texcoord_alpha.xy).a;
+      alpha *= g_texcoord_alpha.z;
+    #else
+      float alpha = g_texcoord_alpha.z;
+    #endif
 
     if (alpha < 0.5) {
       discard;

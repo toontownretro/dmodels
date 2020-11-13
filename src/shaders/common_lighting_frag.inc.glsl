@@ -151,7 +151,7 @@ void ComputeLightVectors(inout LightingParams_t params)
 {
     params.L = params.lPos.xyz - params.fragPos.xyz;
     params.distance = length(params.L);
-    params.L = normalize(params.L);
+    params.L = params.L / params.distance;
 
     ComputeLightHAndDots(params);
 }

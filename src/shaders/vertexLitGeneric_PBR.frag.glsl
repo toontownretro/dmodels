@@ -1,4 +1,4 @@
-#version 330
+#version 430
 
 #extension GL_ARB_explicit_attrib_location : enable
 #extension GL_ARB_gpu_shader5 : enable
@@ -47,6 +47,7 @@
 #include "shaders/common_lighting_frag.inc.glsl"
 #include "shaders/common_fog_frag.inc.glsl"
 #include "shaders/common_frag.inc.glsl"
+#include "shaders/common_sequences.inc.glsl"
 
 #ifdef STATIC_PROP_LIGHTING
     in vec3 l_staticVertexLighting;
@@ -73,9 +74,6 @@ in vec4 l_texcoord;
 
 #ifdef BASETEXTURE
     uniform sampler2D baseTextureSampler;
-#else // BASETEXTURE
-    uniform sampler2D p3d_Texture0;
-    #define baseTextureSampler p3d_Texture0
 #endif
 
 #ifdef ENVMAP
@@ -112,7 +110,6 @@ in vec4 l_texcoord;
 #endif
 
 in vec4 l_vertexColor;
-in vec4 l_colorScale;
 
 #if defined(NUM_CLIP_PLANES) && NUM_CLIP_PLANES > 0
 uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];
@@ -157,6 +154,11 @@ uniform vec4 p3d_ColorScale;
 
 #endif // LIGHTING
 
+#ifdef PLANAR_REFLECTION
+    in vec4 l_texcoordReflection;
+    uniform sampler2D reflectionSampler;
+#endif
+
 uniform vec4 p3d_TexAlphaOnly;
 
 layout(location = COLOR_LOCATION) out vec4 outputColor;
@@ -186,11 +188,15 @@ void main()
         }
     #endif
 
-    vec4 albedo = SampleAlbedo(baseTextureSampler, l_texcoord.xy);
+    #ifdef BASETEXTURE
+        vec4 albedo = SampleAlbedo(baseTextureSampler, l_texcoord.xy);
+        albedo.a = clamp(albedo.a, 0, 1);
+    #else
+        vec4 albedo = vec4(1, 1, 1, 1);
+    #endif
     albedo += p3d_TexAlphaOnly;
     // Modulate albedo with vertex/flat colors
     albedo *= l_vertexColor;
-    albedo *= l_colorScale;
     // Explicit alpha value from material.
     #ifdef ALPHA
         albedo.a *= ALPHA;
@@ -202,10 +208,6 @@ void main()
             discard;
         }
     #endif
-
-    //vec4 colorScale = p3d_ColorScale;
-    //colorScale.xyz = pow(colorScale.xyz, vec3(2.2));
-    //albedo *= colorScale;
 
     #ifdef NEED_EYE_NORMAL
         vec4 finalEyeNormal = normalize(l_eyeNormal);
@@ -222,14 +224,16 @@ void main()
     #endif
 
     #ifdef BUMPMAP
+        vec3 tangentSpaceNormal = GetTangentSpaceNormal(bumpSampler, l_texcoord);
         #if defined(NEED_EYE_NORMAL)
-            GetBumpedEyeNormal(finalEyeNormal, bumpSampler, l_texcoord,
-                            l_tangent, l_binormal);
+            TangentToEye(finalEyeNormal.xyz, l_tangent.xyz,
+                         l_binormal.xyz, tangentSpaceNormal);
         #endif
         #if defined(NEED_WORLD_NORMAL)
-            GetBumpedWorldNormal(finalWorldNormal, bumpSampler, l_texcoord,
-                            tangentSpaceTranspose);
+            TangentToWorld(finalWorldNormal.xyz, tangentSpaceTranspose, tangentSpaceNormal);
         #endif
+    #else
+        vec3 tangentSpaceNormal = vec3(0);
     #endif
 
     #ifdef NEED_WORLD_NORMAL
@@ -360,7 +364,7 @@ void main()
             }
         }
 
-        vec3 totalRadiance = params.totalRadiance;
+        vec3 totalRadiance = max(vec3(0), params.totalRadiance);
 
     #else // LIGHTING
 
@@ -383,11 +387,16 @@ void main()
     vec3 specularLighting = vec3(0);
 
     //#ifdef LIGHTING
-        #ifdef ENVMAP
+        #if defined(ENVMAP) || defined(PLANAR_REFLECTION)
 
-            vec3 spec = SampleCubeMapLod(l_worldEyeToVert.xyz,
-                                         finalWorldNormal,
-                                         envmapSampler, armeParams.y).rgb;
+            #ifdef ENVMAP
+                vec3 spec = SampleCubeMapLod(l_worldEyeToVert.xyz,
+                                            finalWorldNormal,
+                                            envmapSampler, armeParams.y).rgb;
+            #elif defined(PLANAR_REFLECTION)
+                vec2 reflCoords = l_texcoordReflection.xy / l_texcoordReflection.w;
+                vec3 spec = texture(reflectionSampler, reflCoords).rgb;
+            #endif
 
             // TODO: use a BRDF lookup texture in SHADERQUALITY_MEDIUM
             #if SHADER_QUALITY > SHADERQUALITY_LOW
