@@ -5,6 +5,10 @@ in vec2 l_coordTap1;
 in vec2 l_coordTap2;
 in vec2 l_coordTap3;
 
+uniform vec2 camSettings[1];
+#define camExposure (camSettings[0].x)
+#define camMaxLuminance (camSettings[0].y)
+
 uniform sampler2D fbColorSampler;
 uniform vec4 params;
 
@@ -16,10 +20,13 @@ vec4 Shape(vec2 uv)
 {
     vec4 pixel = texture(fbColorSampler, uv);
 
-    // Multiply the pixel by the luminance of the pixel - 1.
-    // This induces bloom only if the luminance is > 1.
-    float lum = max(0, dot(pixel.xyz, Y) - 1);
-    pixel.rgb = pixel.rgb * lum;
+    // Get luminance of pixel multiplied by exposure.
+    float lum = dot(pixel.xyz * camExposure, Y);
+
+    // Induce bloom if the calculated luminance is greater than the max
+    // luminance of the camera.
+    float bloomAmount = max(0, lum - camMaxLuminance);
+    pixel.rgb = pixel.rgb * (pow(bloomAmount, 2.0) * 0.3);
 
     return pixel;
 }
