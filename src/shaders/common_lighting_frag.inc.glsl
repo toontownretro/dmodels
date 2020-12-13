@@ -204,7 +204,7 @@ void GetPointLight(inout LightingParams_t params)
 
     ComputeLightVectors(params);
 
-    params.attenuation = 1.0 / dot(params.lAtten.xyz, vec3(params.distance));
+    params.attenuation = 1.0 / (params.lAtten.x + params.lAtten.y*params.distance + params.lAtten.z*params.distance*params.distance);
 
     AddTotalRadiance(params);
 }
@@ -213,7 +213,7 @@ void GetSpotlight(inout LightingParams_t params)
 {
     ComputeLightVectors(params);
 
-    float distanceAtten = 1.0 / dot(params.lAtten.xyz, vec3(params.distance));
+    float distanceAtten = 1.0 / (params.lAtten.x + params.lAtten.y*params.distance + params.lAtten.z*params.distance*params.distance);
 
     // Spot attenuation
     float cosTheta = dot(params.lDir.xyz, -params.L);

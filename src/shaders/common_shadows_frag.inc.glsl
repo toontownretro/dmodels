@@ -395,7 +395,7 @@ void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCo
 
     mat2 rotationMat = mat2(1, 0, 0, 1);
 
-    float filterRadius = FILTER_RADIUS * SHADOW_TEXEL_SIZE;
+    float filterRadius = SHADOW_BLUR;
 
     //vec2 filterSize = FindFilterSize(mvp, worldPosition, filterRadius);
     //filterSize *= (1.0 + 10.5 * length(worldPosition - cameraPos) / 100);
