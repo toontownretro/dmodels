@@ -9,7 +9,7 @@
 #begin install_egg
   #define UNPAL_SOURCES \
     camera.egg rgbCube.egg xyzAxis.egg arrow.egg \
-    arrow_head.egg scale_head.egg
+    arrow_head.egg scale_head.egg spotlight-editor.egg
 #end install_egg
 
 #begin install_egg

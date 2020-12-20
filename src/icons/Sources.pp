@@ -30,7 +30,7 @@
       editor-move.png editor-redo.png editor-rotate.png editor-save.png editor-scale.png \
       editor-select-faces.png editor-select-groups.png editor-select-objects.png \
       editor-select-verts.png editor-select.png editor-slice.png editor-undo.png \
-      foundry-splash.png foundry.ico
+      foundry-splash.png foundry.ico editor-light-bulb.png editor-sun.png
 
 #end install_icons
 

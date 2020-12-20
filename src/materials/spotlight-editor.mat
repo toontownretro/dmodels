@@ -1,0 +1,13 @@
+shader {
+  name VertexLitGeneric
+  selfillum 1
+}
+
+texture {
+  filename maps/spotlight-albedo.txo
+}
+
+texture {
+  stage arme
+  filename maps/spotlight-arme.txo
+}
