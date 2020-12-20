@@ -50,7 +50,11 @@ vec3 GetSplitBiasedPos(vec3 pos, vec3 normal, vec3 sunVector, int cascade) {
     return biasedPos;
 }
 
-void ComputeShadowPositions(vec3 worldNormal, vec4 worldPosition, vec3 sunVector,
+void ComputeShadowPositions(vec3 worldNormal, vec4 eyePosition, mat4 shadowViewMatrix, inout vec4 shadowCoords) {
+    shadowCoords = shadowViewMatrix * vec4(eyePosition.xyz, 1.0);
+}
+
+void ComputeSunShadowPositions(vec3 worldNormal, vec4 worldPosition, vec3 sunVector,
                             mat4 pssmMVPs[PSSM_SPLITS], inout vec4 pssmCoords[PSSM_SPLITS])
 {
     // The light direction is the direction that the light is pointing,

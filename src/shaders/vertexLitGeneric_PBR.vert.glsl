@@ -71,17 +71,34 @@ out vec4 l_vertexColor;
 in vec4 texcoord;
 out vec4 l_texcoord;
 
-#ifdef HAS_SHADOW_SUNLIGHT
+#if defined(HAS_SHADOW_SUNLIGHT) || defined(HAS_SHADOWED_LIGHT)
     uniform struct p3d_LightSourceParameters {
         vec4 color;
         vec4 position;
         vec4 direction;
         vec4 spotParams;
         vec3 attenuation;
+        #ifdef HAS_SHADOWED_LIGHT
+            mat4 shadowViewMatrix;
+            float hasShadows;
+            #ifdef HAS_SHADOWED_POINT_LIGHT
+                samplerCube shadowMapCube;
+            #endif
+            #ifdef HAS_SHADOWED_SPOTLIGHT
+                sampler2D shadowMap2D;
+            #endif
+        #endif
     } p3d_LightSource[NUM_LIGHTS];
 
+#ifdef HAS_SHADOW_SUNLIGHT
     uniform mat4 p3d_CascadeMVPs[PSSM_SPLITS];
     out vec4 l_pssmCoords[PSSM_SPLITS];
+#endif
+
+#ifdef HAS_SHADOWED_LIGHT
+    out vec4 l_shadowCoords;
+#endif
+
 #endif
 
 #ifdef PLANAR_REFLECTION
@@ -148,8 +165,15 @@ void main()
         l_worldEyeToVert = wspos_view - l_worldPosition;
     #endif
 
+    //#ifdef HAS_SHADOWED_LIGHT
+        //for (int i = 0; i < NUM_LIGHTS; i++) {
+    //        l_shadowCoords = p3d_LightSource[0].color;//.shadowViewMatrix * vec4(l_eyePosition.xyz, 1.0);
+            //l_shadowCoords.xyz = l_shadowCoords.xyz / l_shadowCoords.w;
+        //}
+    //#endif
+
     #ifdef HAS_SHADOW_SUNLIGHT
-        ComputeShadowPositions(l_worldNormal.xyz, l_worldPosition,
+        ComputeSunShadowPositions(l_worldNormal.xyz, l_worldPosition,
                                p3d_LightSource[PSSM_LIGHT_ID].direction.xyz,
                                p3d_CascadeMVPs, l_pssmCoords);
     #endif

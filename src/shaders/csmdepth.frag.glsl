@@ -7,7 +7,10 @@
  */
 
 in vec3 g_texcoord_alpha;
+
+#ifdef NEED_WORLD_POSITION
 in vec4 g_worldPosition;
+#endif
 
 #if defined(NUM_CLIP_PLANES) && NUM_CLIP_PLANES > 0
 uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];

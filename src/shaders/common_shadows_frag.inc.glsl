@@ -14,7 +14,7 @@
 #include "common.inc.glsl"
 #include "common_sequences.inc.glsl"
 
-#ifdef HAS_SHADOW_SUNLIGHT
+#if defined(HAS_SHADOW_SUNLIGHT) || defined(HAS_SHADOWED_LIGHT)
 
 #ifndef PSSM_SPLITS
 #define SHADOW_TEXEL_SIZE 1.0
@@ -255,6 +255,11 @@ float SampleCascadeGather(sampler2DArray shadowSampler, vec3 coords, float depth
     return avg;
 }
 
+float SampleShadowGather(sampler2D shadowSampler, vec2 coords, float depthCmp) {
+    vec4 shadow = step(vec4(depthCmp), textureGather(shadowSampler, coords, 0));
+    return dot(shadow, vec4(0.25));
+}
+
 float noise(vec2 seed)
 {
     return fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
@@ -370,6 +375,29 @@ int FindCascade(vec4 shadowCoords[PSSM_SPLITS], inout vec3 proj, inout float dep
 	}
 }
 
+void GetLightShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords, float NdotL) {
+    lshad = 0.0;
+
+    if (NdotL < 0.0) {
+        return;
+    }
+
+    vec2 proj = shadowCoords.xy;
+    float depthCmp = shadowCoords.z;
+    float filterRadius = (1.0 / float(textureSize(shadowSampler, 0).x)) * 3.0;
+    vec2 filterSize = vec2(filterRadius);
+    mat2 rotationMat = mat2(1, 0, 0, 1);
+
+    for (int i = 0; i < 16; i++) {
+        vec2 offset = halton_2D_16[i];
+        lshad += SampleShadowGather(
+            shadowSampler,
+            proj + (rotationMat * offset) * filterSize,
+            depthCmp);
+    }
+    lshad /= 16;
+}
+
 void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
                   float NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
 {
@@ -467,6 +495,6 @@ void DoBlendShadow(inout vec3 diffuseLighting, sampler2DArray shadowSampler,
     diffuseLighting = min(diffuseLighting, mix(diffuseLighting, ambientLightMin, shadow * shadowMask));
 }
 
-#endif
+#endif // defined(HAS_SHADOW_SUNLIGHT) || defined(HAS_SHADOWED_LIGHT)
 
 #endif // COMMON_SHADOWS_FRAG_INC_GLSL

@@ -129,19 +129,23 @@ uniform vec4 p3d_ColorScale;
 
     #else // BSP_LIGHTING
 
-        uniform struct p3d_LightSourceParameters
-        {
+        uniform struct p3d_LightSourceParameters {
             vec4 color;
             vec4 position;
             vec4 direction;
             vec4 spotParams;
             vec3 attenuation;
+            #ifdef HAS_SHADOWED_LIGHT
+                mat4 shadowViewMatrix;
+                float hasShadows;
+                #ifdef HAS_SHADOWED_POINT_LIGHT
+                    samplerCube shadowMapCube;
+                #endif
+                #ifdef HAS_SHADOWED_SPOTLIGHT
+                    sampler2D shadowMap2D;
+                #endif
+            #endif
         } p3d_LightSource[NUM_LIGHTS];
-
-        uniform struct
-        {
-            vec4 ambient;
-        } p3d_LightModel;
 
     #endif // BSP_LIGHTING
 
@@ -152,7 +156,17 @@ uniform vec4 p3d_ColorScale;
         uniform vec4 wspos_view;
     #endif
 
+    #ifdef HAS_SHADOWED_LIGHT
+        in vec4 l_shadowCoords;
+    #endif
+
 #endif // LIGHTING
+
+#ifdef AMBIENT_LIGHT
+    uniform struct {
+      vec4 ambient;
+    } p3d_LightModel;
+#endif // AMBIENT_LIGHT
 
 #ifdef PLANAR_REFLECTION
     in vec4 l_texcoordReflection;
@@ -285,7 +299,7 @@ void main()
         vec3 ambientDiffuse = vec3(0, 0, 0);
         #ifdef BSP_LIGHTING
             ambientDiffuse += AmbientCubeLight(finalWorldNormal.xyz, ambientCube);
-        #else
+        #elif defined(AMBIENT_LIGHT)
             ambientDiffuse += p3d_LightModel.ambient.rgb;
         #endif
 
@@ -329,6 +343,9 @@ void main()
                 params.lDir = normalize(p3d_LightSource[i].direction);
                 params.lAtten = vec4(p3d_LightSource[i].attenuation, 0.0);
                 params.lSpotParams = p3d_LightSource[i].spotParams;
+                #if HAS_SHADOWED_LIGHT
+                    bool hasShadows = int(p3d_LightSource[i].hasShadows) == 1;
+                #endif
             #endif // BSP_LIGHTING
 
             #ifdef BSP_LIGHTING
@@ -351,7 +368,11 @@ void main()
                 else if (isPoint)
             #endif
             {
-                GetPointLight(params);
+                GetPointLight(params
+                #ifdef HAS_SHADOWED_POINT_LIGHT
+                    , hasShadows, p3d_LightSource[i].shadowMapCube, l_shadowCoords
+                #endif
+                );
             }
             #ifdef BSP_LIGHTING
                 else if (lightType == LIGHTTYPE_SPOT)
@@ -360,7 +381,16 @@ void main()
             #endif
             {
 
-                GetSpotlight(params);
+                #ifdef HAS_SHADOWED_SPOTLIGHT
+                    vec4 coords = p3d_LightSource[i].shadowViewMatrix * vec4(l_eyePosition.xyz, 1.0);
+                    coords.xyz = coords.xyz / coords.w;
+                #endif
+
+                GetSpotlight(params
+                #ifdef HAS_SHADOWED_SPOTLIGHT
+                    , hasShadows, p3d_LightSource[i].shadowMap2D, coords
+                #endif
+                );
             }
         }
 
@@ -368,8 +398,13 @@ void main()
 
     #else // LIGHTING
 
-        // No lighting, pixel starts fullbright.
-        vec3 ambientDiffuse = vec3(1.0);
+        // No direct lighting.  Just give it the ambient if we have it.
+        #ifdef AMBIENT_LIGHT
+            vec3 ambientDiffuse = p3d_LightModel.ambient.rgb;
+        #else
+            // No direct or ambient lighting.  Make it fullbright.
+            vec3 ambientDiffuse = vec3(1.0);
+        #endif
         vec3 totalRadiance = vec3(0);
 
     #endif // LIGHTING

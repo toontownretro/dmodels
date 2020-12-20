@@ -199,30 +199,49 @@ void AddTotalRadiance(inout LightingParams_t params)
     #endif
 }
 
-void GetPointLight(inout LightingParams_t params)
+void GetPointLight(inout LightingParams_t params
+    #ifdef HAS_SHADOWED_POINT_LIGHT
+        , bool hasShadows, samplerCube shadowMap, vec4 shadowCoords
+    #endif
+    )
 {
-
     ComputeLightVectors(params);
 
-    params.attenuation = 1.0 / (params.lAtten.x + params.lAtten.y*params.distance + params.lAtten.z*params.distance*params.distance);
+    // x is a falloff
+    params.attenuation = 1.0 / (params.lAtten.x * (params.distance * params.distance));
+    // Inner/outer radius : y is inner distance, z is outer distance
+    params.attenuation *= clamp((params.lAtten.z - params.distance) / (params.lAtten.z - params.lAtten.y), 0, 1);
 
     AddTotalRadiance(params);
 }
 
-void GetSpotlight(inout LightingParams_t params)
+void GetSpotlight(inout LightingParams_t params
+    #ifdef HAS_SHADOWED_SPOTLIGHT
+        , bool hasShadows, sampler2D shadowMap, vec4 shadowCoords
+    #endif
+    )
 {
     ComputeLightVectors(params);
 
-    float distanceAtten = 1.0 / (params.lAtten.x + params.lAtten.y*params.distance + params.lAtten.z*params.distance*params.distance);
+    float distanceAtten = 1.0 / (params.lAtten.x * (params.distance * params.distance));
+    distanceAtten *= clamp((params.lAtten.z - params.distance) / (params.lAtten.z - params.lAtten.y), 0, 1);
 
     // Spot attenuation
-    float cosTheta = dot(params.lDir.xyz, -params.L);
+    float cosTheta = clamp(dot(params.L, normalize(-params.lDir.xyz)), 0, 1);
     float spotAtten = (cosTheta - params.lSpotParams.z) * params.lSpotParams.w;
     spotAtten = max(0.0001, spotAtten);
     spotAtten = pow(spotAtten, params.lSpotParams.x);
     spotAtten = clamp(spotAtten, 0, 1);
 
     params.attenuation = distanceAtten * spotAtten;
+
+    #ifdef HAS_SHADOWED_SPOTLIGHT
+    if (hasShadows) {
+        float lshad = 0.0;
+        GetLightShadow(lshad, shadowMap, shadowCoords, params.NdotL);
+        params.attenuation *= lshad;
+    }
+    #endif
 
     AddTotalRadiance(params);
 }
