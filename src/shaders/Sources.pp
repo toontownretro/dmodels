@@ -18,6 +18,8 @@
     csmdepth.vert.glsl \
     debug_csm.frag.glsl \
     debug_csm.vert.glsl \
+    depth.frag.glsl \
+    depth.vert.glsl \
     vertexLitGeneric_PBR.frag.glsl \
     vertexLitGeneric_PBR.vert.glsl
 #end install_shader
