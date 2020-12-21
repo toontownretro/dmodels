@@ -5,6 +5,9 @@
   #define SOURCES $[wildcard *.flt]
 #end flt_egg
 
+#begin maya_egg
+  #define SOURCES $[wildcard *.mb]
+#end maya_egg
 
 #begin install_egg
   #define UNPAL_SOURCES \
