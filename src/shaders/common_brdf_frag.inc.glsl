@@ -20,7 +20,7 @@ vec3 Fresnel_Schlick( vec3 specularColor, float VdotH )
     return specularColor + ( 1.0 - specularColor ) * pow( clamp(1.0 - VdotH, 0, 1), 5.0 );
 }
 
-vec3 CookTorrance(vec3 F, float G, float D, float NdotL, float NdotV)
+vec3 CookTorrance(vec3 F, vec3 G, float D, vec3 NdotL, float NdotV)
 {
     return F * G * D / (4.0 * NdotL * NdotV);
 }
@@ -32,11 +32,11 @@ float MicrofacetDistributionTerm(float alpha2, float NdotH)
     return D;
 }
 
-float GeometricOcclusionTerm(float alpha2, float NdotL, float NdotV)
+vec3 GeometricOcclusionTerm(float alpha2, vec3 NdotL, float NdotV)
 {
-    float attenuationL = 2.0 * NdotL / (NdotL + sqrt(alpha2 + (1.0 - alpha2) * (NdotL * NdotL)));
+    vec3 attenuationL = 2.0 * NdotL / (NdotL + sqrt(alpha2 + (1.0 - alpha2) * (NdotL * NdotL)));
     float attenuationV = 2.0 * NdotV / (NdotV + sqrt(alpha2 + (1.0 - alpha2) * (NdotV * NdotV)));
-    float G = attenuationL * attenuationV;
+    vec3 G = attenuationL * attenuationV;
     return G;
 }
 

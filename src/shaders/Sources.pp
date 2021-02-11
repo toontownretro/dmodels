@@ -20,6 +20,8 @@
     debug_csm.vert.glsl \
     depth.frag.glsl \
     depth.vert.glsl \
+    lightmappedGeneric_PBR.frag.glsl \
+    lightmappedGeneric_PBR.vert.glsl \
     vertexLitGeneric_PBR.frag.glsl \
     vertexLitGeneric_PBR.vert.glsl
 #end install_shader

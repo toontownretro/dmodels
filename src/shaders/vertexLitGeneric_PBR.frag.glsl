@@ -74,6 +74,8 @@ in vec4 l_texcoord;
 
 #ifdef BASETEXTURE
     uniform sampler2D baseTextureSampler;
+#elif defined(BASECOLOR)
+    uniform vec4 baseColor;
 #endif
 
 #ifdef ENVMAP
@@ -86,6 +88,8 @@ in vec4 l_texcoord;
     // AO/Roughness/Metallic/Emissive texture
     // =========================
     uniform sampler2D armeSampler;
+#else
+    uniform vec4 armeParams;
 #endif
 
 #ifdef SELFILLUM
@@ -205,6 +209,8 @@ void main()
     #ifdef BASETEXTURE
         vec4 albedo = SampleAlbedo(baseTextureSampler, l_texcoord.xy);
         albedo.a = clamp(albedo.a, 0, 1);
+    #elif defined(BASECOLOR)
+        vec4 albedo = baseColor;
     #else
         vec4 albedo = vec4(1, 1, 1, 1);
     #endif
@@ -238,7 +244,7 @@ void main()
     #endif
 
     #ifdef BUMPMAP
-        vec3 tangentSpaceNormal = GetTangentSpaceNormal(bumpSampler, l_texcoord);
+        vec3 tangentSpaceNormal = GetTangentSpaceNormal(bumpSampler, l_texcoord.xy);
         #if defined(NEED_EYE_NORMAL)
             TangentToEye(finalEyeNormal.xyz, l_tangent.xyz,
                          l_binormal.xyz, tangentSpaceNormal);
@@ -259,11 +265,8 @@ void main()
     // AO/Roughness/Metallic/Emissive properties
     #ifdef ARME
         vec4 armeParams = texture(armeSampler, l_texcoord.xy);
-    #else
-        // FIXME
-        //vec4 armeParams = vec4(AO, ROUGHNESS, METALLIC, EMISSIVE);
-        vec4 armeParams = vec4(1, 1, 0, 0);
     #endif
+    // If we didn't get an ARME texture, armeParams is a shader input.
 
     /////////////////////////////////////////////////////
     // Aux bitplane outputs

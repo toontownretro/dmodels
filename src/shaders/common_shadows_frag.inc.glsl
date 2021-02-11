@@ -375,10 +375,10 @@ int FindCascade(vec4 shadowCoords[PSSM_SPLITS], inout vec3 proj, inout float dep
 	}
 }
 
-void GetLightShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords, float NdotL) {
+void GetLightShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords, vec3 NdotL) {
     lshad = 0.0;
 
-    if (NdotL < 0.0) {
+    if (max3(NdotL) < 0.0) {
         return;
     }
 
@@ -399,7 +399,7 @@ void GetLightShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoord
 }
 
 void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
-                  float NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
+                  vec3 NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
 {
 	lshad = 0.0;
 
@@ -410,7 +410,7 @@ void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCo
 	// will cause brush faces facing away from the fake shadows
 	// to be dark.
 	//#if !defined(BUMPED_LIGHTMAP) && !defined(FLAT_LIGHTMAP)
-		if (NdotL < 0.0)
+		if (max3(NdotL) < 0.0)
 		{
 			return;
 		}

@@ -60,7 +60,7 @@ struct LightingParams_t
     // These ones are calculated by the light
     vec3 L; // light->fragment ( or in case of directional light, direction of light )
     vec3 H; // half (light->fragment)
-    float NdotL;
+    vec3 NdotL;
     float NdotH;
     float VdotH;
     float attenuation;
@@ -94,7 +94,7 @@ LightingParams_t newLightingParams_t(vec4 eyePos, vec3 eyeVec, vec3 eyeNormal, f
 
         vec3(0),
         vec3(0),
-        0.0,
+        vec3(0),
         0.0,
         0.0,
         0.0,
@@ -112,23 +112,25 @@ void ComputeLightHAndDots(inout LightingParams_t params)
         params.H = normalize(params.L + params.V);
     #endif
 
-    params.NdotL = dot(params.N, params.L);
+    float NdotL = dot(params.N, params.L);
     #ifdef HALFLAMBERT
-        params.NdotL = clamp(params.NdotL * 0.5 + 0.5, 0.001, 1.0);
+        NdotL = clamp(NdotL * 0.5 + 0.5, 0.001, 1.0);
         #ifndef LIGHTWARP
-            params.NdotL *= params.NdotL;
+            NdotL *= NdotL;
         #endif
     #else // HALFLAMBERT
-        params.NdotL = clamp(params.NdotL, 0.001, 1.0);
+        NdotL = clamp(NdotL, 0.001, 1.0);
     #endif // HALFLAMBERT
     #ifdef LIGHTWARP
-        vec4 lwSample = texture(lightwarpSampler, vec2(params.NdotL, 0.5));
+        vec4 lwSample = texture(lightwarpSampler, vec2(NdotL, 0.5));
         #ifdef LIGHTWARP_IS_LUMINANCE
             // If the lightwarp was grayscale, it won't automatically convert from gamma to linear,
             // so do that here. This is so annoying.
             lwSample.rgb = pow(lwSample.rgb, vec3(2.2));
         #endif
-        params.NdotL = 2.0 * lwSample.r;
+        params.NdotL = lwSample.rgb * 2.0;
+    #else // LIGHTWARP
+        params.NdotL = vec3(NdotL);
     #endif // LIGHTWARP
 
 
@@ -167,7 +169,7 @@ void AddTotalRadiance(inout LightingParams_t params)
 
     #if SHADER_QUALITY == SHADERQUALITY_HIGH
         // Full PBR light contribution with cook-torrance specular
-        float G = GeometricOcclusionTerm(params.roughness2, params.NdotL, params.NdotV);
+        vec3 G = GeometricOcclusionTerm(params.roughness2, params.NdotL, params.NdotV);
         float D = MicrofacetDistributionTerm(params.roughness2, params.NdotH);
         vec3 F	= Fresnel_Schlick(params.specularColor, params.VdotH);
         vec3 kS = F;
