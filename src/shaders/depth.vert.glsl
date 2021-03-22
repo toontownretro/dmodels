@@ -24,6 +24,10 @@ uniform mat4 p3d_ModelMatrix;
 out vec4 l_worldPosition;
 #endif
 
+#ifndef BASETEXTURE
+uniform vec4 baseColor;
+#endif
+
 void main() {
   vec4 finalVertex = p3d_Vertex;
   #if HAS_HARDWARE_SKINNING
@@ -36,5 +40,11 @@ void main() {
   #ifdef NEED_WORLD_POSITION
     l_worldPosition = p3d_ModelMatrix * finalVertex;
   #endif
-  l_texcoord_alpha = vec3(texcoord, p3d_ColorScale.a * p3d_Color.a);
+
+  float alpha = p3d_ColorScale.a * p3d_Color.a
+    #ifndef BASETEXTURE
+    * baseColor.a
+    #endif
+    ;
+  l_texcoord_alpha = vec3(texcoord, alpha);
 }

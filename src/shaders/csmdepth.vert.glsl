@@ -25,6 +25,10 @@ out int v_instanceID;
 out vec4 v_worldPosition;
 #endif
 
+#ifndef BASETEXTURE
+uniform vec4 baseColor;
+#endif
+
 void main() {
   vec4 finalVertex = p3d_Vertex;
   #if HAS_HARDWARE_SKINNING
@@ -37,7 +41,13 @@ void main() {
   // Then multiply by the cascade's view-projection matrix.
   gl_Position = p3d_CascadeMVPs[gl_InstanceID] * worldPos;
 
-  v_texcoord_alpha = vec3(texcoord, p3d_ColorScale.a * p3d_Color.a);
+  float alpha = p3d_ColorScale.a * p3d_Color.a
+    #ifndef BASETEXTURE
+    * baseColor.a
+    #endif
+    ;
+  v_texcoord_alpha = vec3(texcoord, alpha);
+
   v_instanceID = gl_InstanceID;
 
   #ifdef NEED_WORLD_POSITION
