@@ -22,6 +22,8 @@
     depth.vert.glsl \
     lightmappedGeneric_PBR.frag.glsl \
     lightmappedGeneric_PBR.vert.glsl \
+    unlitNoMat.frag.glsl \
+    unlitNoMat.vert.glsl \
     vertexLitGeneric_PBR.frag.glsl \
     vertexLitGeneric_PBR.vert.glsl
 #end install_shader
