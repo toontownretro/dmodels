@@ -15,15 +15,17 @@
  *
  */
 
-#pragma include "shaders/stdshaders/common.inc.glsl"
-#pragma include "shaders/stdshaders/common_animation_vert.inc.glsl"
+#extension GL_GOOGLE_include_directive : enable
+
+#include "shaders/common.inc.glsl"
+#include "shaders/common_animation_vert.inc.glsl"
 
 uniform mat4 p3d_ModelViewProjectionMatrix;
 in vec4 p3d_Vertex;
 
 #ifdef HAS_TEXTURE
 in vec4 texcoord;
-uniform mat4 p3d_TextureTransform[0];
+uniform mat4 p3d_TextureTransform[1];
 out vec2 l_texcoord;
 #endif
 
@@ -47,7 +49,7 @@ void main()
 
     vec4 vertexColor = p3d_Color;
     vec4 colorScale = p3d_ColorScale;
-    GammaToLinear(vertexColor.rgb);
-    GammaToLinear(colorScale.rgb);
+    GammaToLinear(vertexColor);
+    GammaToLinear(colorScale);
     l_vertexColor = vertexColor * colorScale;
 }

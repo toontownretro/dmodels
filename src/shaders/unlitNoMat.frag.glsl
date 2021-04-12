@@ -15,9 +15,11 @@
  *
  */
 
-#pragma include "shaders/common_frag.inc.glsl"
-#pragma include "shaders/common_lighting_frag.inc.glsl"
-#pragma include "shaders/common_fog_frag.inc.glsl"
+#extension GL_GOOGLE_include_directive : enable
+
+#include "shaders/common_frag.inc.glsl"
+#include "shaders/common_lighting_frag.inc.glsl"
+#include "shaders/common_fog_frag.inc.glsl"
 
 #ifdef HAS_TEXTURE
 uniform sampler2D p3d_Texture0;
