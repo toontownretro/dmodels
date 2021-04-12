@@ -14,7 +14,7 @@ uniform vec2 tapOffsets[4];
 void main()
 {
     gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
-    
+
     l_coordTap0 = texcoord.xy + tapOffsets[0];
     l_coordTap1 = texcoord.xy + tapOffsets[1];
     l_coordTap2 = texcoord.xy + tapOffsets[2];

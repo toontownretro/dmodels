@@ -21,12 +21,12 @@ vec4 Shape(vec2 uv)
     vec4 pixel = texture(fbColorSampler, uv);
 
     // Get luminance of pixel multiplied by exposure.
-    float lum = dot(pixel.xyz * camExposure, Y);
+    float lum = dot(pixel.xyz, Y);
 
     // Induce bloom if the calculated luminance is greater than the max
     // luminance of the camera.
     float bloomAmount = max(0, lum - camMaxLuminance);
-    pixel.rgb = pixel.rgb * (pow(bloomAmount, 2.0) * 0.3);
+    pixel.rgb = pixel.rgb * bloomAmount;
 
     return pixel;
 }
