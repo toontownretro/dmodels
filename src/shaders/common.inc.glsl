@@ -137,4 +137,28 @@ vec4 textureArrayBicubic(sampler2DArray sampler, vec3 texCoords) {
     , sy);
 }
 
+vec3 WorldToTangent(vec3 worldVector, vec3 worldNormal, vec3 worldTangent, vec3 worldBinormal) {
+    vec3 tangentVector = vec3(0);
+    tangentVector.x = dot(worldVector, worldTangent);
+    tangentVector.y = dot(worldVector, worldBinormal);
+    tangentVector.z = dot(worldVector, worldNormal);
+    return tangentVector;
+}
+
+vec3 WorldToTangentNormalized(vec3 worldVector, vec3 worldNormal, vec3 worldTangent, vec3 worldBinormal) {
+    return normalize(WorldToTangent(worldVector, worldNormal, worldTangent, worldBinormal));
+}
+
+vec3 TangentToWorld(vec3 tangentVector, vec3 worldNormal, vec3 worldTangent, vec3 worldBinormal) {
+  vec3 worldVector = vec3(0);
+  worldVector.xyz = tangentVector.x * worldTangent.xyz;
+  worldVector.xyz += tangentVector.y * worldBinormal.xyz;
+  worldVector.xyz += tangentVector.z * worldNormal.xyz;
+  return worldVector;
+}
+
+vec3 TangentToWorldNormalized(vec3 tangentVector, vec3 worldNormal, vec3 worldTangent, vec3 worldBinormal) {
+  return normalize(TangentToWorld(tangentVector, worldNormal, worldTangent, worldBinormal));
+}
+
 #endif // COMMON_INC_GLSL

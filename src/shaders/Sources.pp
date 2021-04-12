@@ -20,8 +20,12 @@
     debug_csm.vert.glsl \
     depth.frag.glsl \
     depth.vert.glsl \
+    eyes.frag.glsl \
+    eyes.vert.glsl \
     lightmappedGeneric_PBR.frag.glsl \
     lightmappedGeneric_PBR.vert.glsl \
+    skybox.frag.glsl \
+    skybox.vert.glsl \
     unlitNoMat.frag.glsl \
     unlitNoMat.vert.glsl \
     vertexLitGeneric_PBR.frag.glsl \
