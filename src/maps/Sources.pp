@@ -1,16 +1,20 @@
 #define DIR_TYPE models
 #define INSTALL_TO maps
 
-#begin install_txo
-  #define SOURCES \
-    spotlight-albedo.png
-  #define TXO_OPTS \
-    -srgb -dxt5 -trilinear
-#end install_txo
 
-#begin install_txo
+#begin install_tex
   #define SOURCES \
-    spotlight-arme.png
-  #define TXO_OPTS \
-    -dxt5 -trilinear
-#end install_txo
+    //4map.ptex \
+    circle.ptex \
+    Dirlight.ptex \
+    general_panel.ptex \
+    lightbulb.ptex \
+    lilsmiley.ptex \
+    Pointlight.ptex \
+    smiley.ptex \
+    soft_iris.ptex \
+    Spotlight.ptex \
+    square_opening.ptex \
+    square.ptex \
+    triangle.ptex
+#end install_tex
