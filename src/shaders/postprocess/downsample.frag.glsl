@@ -14,7 +14,7 @@ uniform vec4 params;
 
 out vec4 outputColor;
 
-const vec3 Y = vec3(0.2126, 0.7152, 0.0722);
+const vec3 Y = vec3(0.2125, 0.7154, 0.0721);
 
 vec4 Shape(vec2 uv)
 {
@@ -25,7 +25,7 @@ vec4 Shape(vec2 uv)
 
     // Induce bloom if the calculated luminance is greater than the max
     // luminance of the camera.
-    float bloomAmount = max(0, lum - camMaxLuminance);
+    float bloomAmount = max(0, lum - (camMaxLuminance * 0.5));
     pixel.rgb = pixel.rgb * bloomAmount;
 
     return pixel;
