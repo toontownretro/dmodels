@@ -47,6 +47,7 @@ struct LightingParams_t
     float roughness2;
     float metallic;
     vec3 specularColor;
+    float specularScale;
     vec3 albedo;
 
     // This information is filled in for a light
@@ -72,7 +73,7 @@ struct LightingParams_t
 };
 
 LightingParams_t newLightingParams_t(vec4 eyePos, vec3 eyeVec, vec3 eyeNormal, float NdotV,
-                                     float roughness, float metallic, vec3 specular,
+                                     float roughness, float metallic, vec3 specular, float specularScale,
                                      vec3 albedo)
 {
     LightingParams_t params = LightingParams_t(
@@ -84,6 +85,7 @@ LightingParams_t newLightingParams_t(vec4 eyePos, vec3 eyeVec, vec3 eyeNormal, f
         roughness*roughness*roughness*roughness,
         metallic,
         specular,
+        specularScale,
         albedo,
 
         vec4(0),
@@ -176,7 +178,7 @@ void AddTotalRadiance(inout LightingParams_t params)
         vec3 kD = vec3(1.0) - kS;
         kD *= 1.0 - params.metallic;
         vec3 diffuse = kD * params.albedo / PI;
-        vec3 specular = CookTorrance(F, G, D, params.NdotL, params.NdotV);
+        vec3 specular = CookTorrance(F, G, D, params.NdotL, params.NdotV) * params.specularScale;
         params.totalRadiance += (diffuse + specular) * lightRadiance * params.NdotL;
 
     #elif SHADER_QUALITY == SHADERQUALITY_MEDIUM

@@ -108,6 +108,10 @@ in vec4 l_texcoord;
     uniform sampler2D bumpSampler;
 #endif
 
+#ifdef SPECULAR_MAP
+    uniform sampler2D specularSampler;
+#endif
+
 #ifdef NEED_TBN
     in vec4 l_tangent;
     in vec4 l_binormal;
@@ -285,6 +289,12 @@ void main()
 
     vec3 specularColor = mix(vec3(0.04), albedo.rgb, armeParams.z);
 
+    #ifdef SPECULAR_MAP
+        float specularScale = texture(specularSampler, l_texcoord.xy).r;
+    #else
+        float specularScale = 1.0;
+    #endif
+
     #ifdef LIGHTING
 
         // Initialize our lighting parameters
@@ -296,6 +306,7 @@ void main()
             armeParams.y,
             armeParams.z,
             specularColor,
+            specularScale,
             albedo.rgb
             );
 
@@ -443,7 +454,7 @@ void main()
                 vec3 iblspec = spec * F * specularColor;
             #endif
 
-            specularLighting += iblspec;
+            specularLighting += iblspec * specularScale;
 
         #endif
     //#endif

@@ -178,6 +178,7 @@ void main() {
         roughness,
         metalness,
         specularColor,
+        1.0,
         irisColor.rgb
         );
 

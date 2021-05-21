@@ -297,7 +297,7 @@ void main()
 
     #ifdef HAS_SHADOW_SUNLIGHT
         LightingParams_t params = newLightingParams_t(vec4(0), normalize(l_worldEyeToVert.xyz), finalWorldNormal.xyz, NdotV,
-                                                      roughness, metallic, specularColor.rgb, albedo.rgb);
+                                                      roughness, metallic, specularColor.rgb, 1.0, albedo.rgb);
         params.lDir.xyz = sunVector[0];
         params.lColor.rgb = sunColor;
         GetDirectionalLight(params, pssmSplitSampler, l_pssmCoords);
