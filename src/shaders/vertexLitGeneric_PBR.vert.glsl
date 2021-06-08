@@ -109,8 +109,8 @@ out vec4 l_texcoord;
                                 vec4(0.5, 0.5, 0.5, 1.0));
 #endif
 
-#if NUM_TEXTURES > 0
-uniform mat4 p3d_TextureTransform[NUM_TEXTURES];
+#ifdef BASETEXTURETRANSFORM
+uniform mat4 baseTextureTransform;
 #endif
 
 void main()
@@ -125,8 +125,8 @@ void main()
 	gl_Position = p3d_ModelViewProjectionMatrix * finalVertex;
 
     // pass through the texcoord input as-is
-    #ifdef BASETEXTURE_INDEX
-        l_texcoord = p3d_TextureTransform[BASETEXTURE_INDEX] * texcoord;
+    #ifdef BASETEXTURETRANSFORM
+        l_texcoord = baseTextureTransform * texcoord;
     #else
         l_texcoord = texcoord;
     #endif

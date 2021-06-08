@@ -15,6 +15,8 @@
     downsample.frag.glsl \
     downsample.vert.glsl \
     extract_bright_spots.frag.glsl \
+    final_output.frag.glsl \
+    freeze_frame.frag.glsl \
     fxaa.frag.glsl \
     fxaa.vert.glsl \
     hbao_old.frag.glsl \
