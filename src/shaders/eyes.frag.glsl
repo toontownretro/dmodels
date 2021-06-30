@@ -54,6 +54,7 @@ out vec4 outputColor;
 uniform sampler2D corneaSampler;
 uniform sampler2D irisSampler;
 uniform samplerCube eyeReflectionCubemapSampler;
+uniform sampler2D brdfLutSampler;
 uniform sampler2D eyeAmbientOcclSampler;
 uniform sampler2D lightwarpSampler;
 
@@ -127,6 +128,8 @@ void main() {
   // Sample 2D normal from texture
   vec3 corneaTangentNormal = vec3(0, 0, 1);
   vec4 corneaSample = texture(corneaSampler, corneaUv);
+  //outputColor = vec4(corneaSample.rgb * length(p3d_LightModel.ambient.rgb), 1);
+  //return;
   corneaTangentNormal.xy = corneaSample.rg - 0.5;
 
   // Scale strength of normal
@@ -152,6 +155,9 @@ void main() {
   // Iris color
   vec4 irisColor = texture(irisSampler, irisUv);
 
+  //outputColor = vec4(irisColor.rgb * length(p3d_LightModel.ambient.rgb), 1);
+  //return;
+
   // Iris lighting highlights
   vec3 irisLighting = vec3(0);
 
@@ -163,8 +169,9 @@ void main() {
   irisTangentNormal.xy *= -2.5;
 
   // !!!!!!!!!!!!!!!!!!!!!PBR Cornea lighting!!!!!!!!!!!!!!!!!!!!!!
-  float NdotV = clamp(abs(dot(corneaWorldNormal.xyz, normalize(worldViewVector.xyz))), 0, 1);
-  float roughness = 0.0;
+  float NdotV = max(0.0, dot(corneaWorldNormal.xyz, normalize(worldViewVector.xyz)));
+  float perceptualRoughness = clamp(pow(1 - glossiness, 3.5), 0, 1);
+  float roughness = perceptualRoughness * perceptualRoughness;
   float metalness = 0.0;
   vec3 specularColor = mix(vec3(0.04), irisColor.rgb, metalness);
   #ifdef LIGHTING
@@ -241,10 +248,12 @@ void main() {
   ambientDiffuse *= ambientOcclColor;
 
   vec3 corneaReflectionVector = reflect(worldViewVector.xyz, corneaWorldNormal.xyz);
-  vec3 reflection = glossiness * texture(eyeReflectionCubemapSampler, corneaReflectionVector.xyz).rgb;
+  vec3 reflection = texture(eyeReflectionCubemapSampler, corneaReflectionVector.xyz).rgb;
   #ifdef AMBIENT_LIGHT
     reflection *= length(p3d_LightModel.ambient.rgb);
   #endif
+  vec2 specularBRDF = texture(brdfLutSampler, vec2(NdotV, perceptualRoughness)).xy;
+  reflection *= (specularColor * specularBRDF.x + specularBRDF.y);
 
   ambientDiffuse *= irisColor.rgb;
 

@@ -22,22 +22,22 @@ vec3 Fresnel_Schlick( vec3 specularColor, float VdotH )
 
 vec3 CookTorrance(vec3 F, vec3 G, float D, vec3 NdotL, float NdotV)
 {
-    return F * G * D / (4.0 * NdotL * NdotV);
+    return F * G * D;
 }
 
-float MicrofacetDistributionTerm(float alpha2, float NdotH)
+float MicrofacetDistributionTerm(float alpha, float NdotH)
 {
-    float f = (NdotH * alpha2 - NdotH) * NdotH + 1.0;
-    float D = alpha2 / (PI * f * f);
-    return D;
+		float alpha2 = alpha * alpha;
+    float f = (NdotH * NdotH) * (alpha2 - 1.0) + 1.0;
+    return alpha2 / (PI * f * f);
 }
 
-vec3 GeometricOcclusionTerm(float alpha2, vec3 NdotL, float NdotV)
+vec3 GeometricOcclusionTerm(float alpha, vec3 NdotL, float NdotV)
 {
-    vec3 attenuationL = 2.0 * NdotL / (NdotL + sqrt(alpha2 + (1.0 - alpha2) * (NdotL * NdotL)));
-    float attenuationV = 2.0 * NdotV / (NdotV + sqrt(alpha2 + (1.0 - alpha2) * (NdotV * NdotV)));
-    vec3 G = attenuationL * attenuationV;
-    return G;
+		float alpha2 = alpha * alpha;
+    vec3 attenuationV = NdotL * sqrt(NdotV * NdotV * (1.0 - alpha2) + alpha2);
+		vec3 attenuationL = NdotV * sqrt(NdotL * NdotL * (1.0 - alpha2) + alpha2);
+    return max(vec3(0.0), 0.5 / (attenuationV + attenuationL));
 }
 
 // Environment BRDF approximations

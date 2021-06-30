@@ -24,6 +24,10 @@
     uniform sampler2D lightwarpSampler;
 #endif
 
+#ifdef TRANSMISSIVEMASK
+    uniform sampler2D transmissiveSampler;
+#endif
+
 /**
  * Per-light parameters that are needed to
  * calculate the light's contribution.
@@ -43,8 +47,7 @@ struct LightingParams_t
     vec3 V; // camera->fragment
     vec3 N; // fragment normal
     float NdotV;
-    float roughness;
-    float roughness2;
+    float roughness; // perceptual (input) roughness ^ 2
     float metallic;
     vec3 specularColor;
     float specularScale;
@@ -81,8 +84,7 @@ LightingParams_t newLightingParams_t(vec4 eyePos, vec3 eyeVec, vec3 eyeNormal, f
         eyeVec,
         eyeNormal,
         NdotV,
-        roughness*roughness,
-        roughness*roughness*roughness*roughness,
+        roughness,
         metallic,
         specular,
         specularScale,
@@ -116,9 +118,14 @@ void ComputeLightHAndDots(inout LightingParams_t params)
 
     float NdotL = dot(params.N, params.L);
     #ifdef HALFLAMBERT
-        NdotL = clamp(NdotL * 0.5 + 0.5, 0.001, 1.0);
+        float HL_NdotL = clamp(NdotL * 0.5 + 0.5, 0.001, 1.0);
         #ifndef LIGHTWARP
-            NdotL *= NdotL;
+            HL_NdotL *= HL_NdotL;
+        #endif
+        #ifdef TRANSMISSIVEMASK
+            NdotL = mix(NdotL, HL_NdotL, texture(transmissiveSampler, l_texcoord.xy).r);
+        #else
+            NdotL = HL_NdotL;
         #endif
     #else // HALFLAMBERT
         NdotL = clamp(NdotL, 0.001, 1.0);
@@ -171,8 +178,8 @@ void AddTotalRadiance(inout LightingParams_t params)
 
     #if SHADER_QUALITY == SHADERQUALITY_HIGH
         // Full PBR light contribution with cook-torrance specular
-        vec3 G = GeometricOcclusionTerm(params.roughness2, params.NdotL, params.NdotV);
-        float D = MicrofacetDistributionTerm(params.roughness2, params.NdotH);
+        vec3 G = GeometricOcclusionTerm(params.roughness, params.NdotL, params.NdotV);
+        float D = MicrofacetDistributionTerm(params.roughness, params.NdotH);
         vec3 F	= Fresnel_Schlick(params.specularColor, params.VdotH);
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
@@ -191,7 +198,7 @@ void AddTotalRadiance(inout LightingParams_t params)
 
         vec3 lhalf = normalize(params.L - normalize(params.fragPos.xyz));
         float LdotR = clamp(dot(params.N, lhalf), 0, 1);
-        vec3 specular = F * pow(LdotR, RoughnessToPhongExponent(params.roughness2));
+        vec3 specular = F * pow(LdotR, RoughnessToPhongExponent(params.roughness));
 
         params.totalRadiance += (diffuse + specular) * lightRadiance * params.NdotL;
 
@@ -344,7 +351,7 @@ void GetBumpedEyeAndWorldNormal(inout vec4 finalEyeNormal, inout vec4 finalWorld
 
 vec3 CalcReflectionVectorUnnormalized(vec3 normal, vec3 eyeVector)
 {
-	return (2.0*(dot( normal, eyeVector ))*normal) - (dot( normal, normal )*eyeVector);
+	return 2.0 * max(0.0, dot(normal, eyeVector)) * normal - eyeVector;
 }
 
 vec3 CalcReflectionVectorNormalized(vec3 normal, vec3 eyeVector)
@@ -358,15 +365,16 @@ vec4 SampleCubeMap(vec3 worldCamToVert, vec4 worldNormal, samplerCube cubeSample
 	return texture(cubeSampler, cmR);
 }
 
-const int CUBEMAP_MIPS = 8;
+const int CUBEMAP_MIPS = 10;
 
 vec4 SampleCubeMapLod(vec3 worldCamToVert, vec4 worldNormal,
 					  samplerCube cubeSampler,
                       float roughness)
 {
-	vec3 cmR = CalcReflectionVectorUnnormalized(worldNormal.xyz, worldCamToVert);
+	vec3 cmR = CalcReflectionVectorUnnormalized(worldNormal.xyz, normalize(worldCamToVert));
+    //int levels = int(textureQueryLevels(cubeSampler));
 	return textureLod(cubeSampler, cmR,
-                      roughness * (CUBEMAP_MIPS - 1));
+                      int(roughness * (CUBEMAP_MIPS - 1)));
     //return texture(cubeSampler, cmR);
 }
 

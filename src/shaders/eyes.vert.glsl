@@ -53,7 +53,8 @@ void main() {
 
   #if HAS_HARDWARE_SKINNING
     vec3 foo = vec3(0);
-    DoHardwareAnimation(finalVertex, finalNormal, p3d_Vertex, foo);
+    vec3 foo2 = vec3(0);
+    DoHardwareAnimation(finalVertex, foo2, p3d_Vertex, foo);
   #endif
 
   gl_Position = p3d_ModelViewProjectionMatrix * finalVertex;

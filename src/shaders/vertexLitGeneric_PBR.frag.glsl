@@ -80,16 +80,32 @@ in vec4 l_texcoord;
 
 #ifdef ENVMAP
     uniform samplerCube envmapSampler;
+    uniform sampler2D brdfLut;
     uniform vec3 envmapTint;
 #endif
 
-#ifdef ARME
-    // =========================
-    // AO/Roughness/Metallic/Emissive texture
-    // =========================
-    uniform sampler2D armeSampler;
-#else
-    uniform vec4 armeParams;
+uniform vec4 u_armeParams;
+
+#ifdef AO_MAP
+    uniform sampler2D aoSampler;
+#endif
+
+#ifdef ROUGHNESS_MAP
+    uniform sampler2D roughnessSampler;
+#elif defined(GLOSS_MAP)
+    uniform sampler2D glossSampler;
+#endif
+
+#ifdef METALNESS_MAP
+    uniform sampler2D metalnessSampler;
+#endif
+
+#ifdef EMISSION_MAP
+    uniform sampler2D emissionSampler;
+#endif
+
+#ifdef SPECULAR_MAP
+    uniform sampler2D specularSampler;
 #endif
 
 #ifdef SELFILLUM
@@ -106,10 +122,6 @@ in vec4 l_texcoord;
 
 #ifdef BUMPMAP
     uniform sampler2D bumpSampler;
-#endif
-
-#ifdef SPECULAR_MAP
-    uniform sampler2D specularSampler;
 #endif
 
 #ifdef NEED_TBN
@@ -261,16 +273,34 @@ void main()
     #endif
 
     #ifdef NEED_WORLD_NORMAL
-        float NdotV = clamp(abs(dot(finalWorldNormal.xyz, normalize(l_worldEyeToVert.xyz))), 0, 1);
+        float NdotV = max(0.0, dot(finalWorldNormal.xyz, normalize(l_worldEyeToVert.xyz)));
     #else
         float NdotV = 1.0;
     #endif
 
     // AO/Roughness/Metallic/Emissive properties
-    #ifdef ARME
-        vec4 armeParams = texture(armeSampler, l_texcoord.xy);
+    float ao = clamp(u_armeParams.x, 0, 1);
+    float perceptualRoughness = u_armeParams.y;
+    float metalness = clamp(u_armeParams.z, 0, 1);
+    float emission = clamp(u_armeParams.w, 0, 1);
+    #ifdef AO_MAP
+        ao = texture(aoSampler, l_texcoord.xy).r;
     #endif
-    // If we didn't get an ARME texture, armeParams is a shader input.
+    #ifdef ROUGHNESS_MAP
+        perceptualRoughness *= texture(roughnessSampler, l_texcoord.xy).r;
+    #elif defined(GLOSS_MAP)
+        perceptualRoughness *= pow(1 - texture(glossSampler, l_texcoord.xy).r, 2);
+    #endif
+    #ifdef METALNESS_MAP
+        metalness = texture(metalnessSampler, l_texcoord.xy).r;
+    #endif
+    #ifdef EMISSION_MAP
+        emission = texture(emissionSampler, l_texcoord.xy).r;
+    #endif
+
+    perceptualRoughness = clamp(perceptualRoughness, 0, 1);
+
+    float roughness = perceptualRoughness * perceptualRoughness;
 
     /////////////////////////////////////////////////////
     // Aux bitplane outputs
@@ -283,11 +313,11 @@ void main()
         o_aux_normal = vec4((finalWorldNormal.xyz * 0.5) + 0.5, 1);
     #endif
     #ifdef NEED_AUX_ARME
-        o_aux_arme = armeParams;
+        o_aux_arme = vec4(ao, perceptualRoughness, metalness, emission);
     #endif
     /////////////////////////////////////////////////////
 
-    vec3 specularColor = mix(vec3(0.04), albedo.rgb, armeParams.z);
+    vec3 specularColor = mix(vec3(0.04), albedo.rgb, metalness);
 
     #ifdef SPECULAR_MAP
         float specularScale = texture(specularSampler, l_texcoord.xy).r;
@@ -303,8 +333,8 @@ void main()
             normalize(l_worldEyeToVert.xyz),
             normalize(finalWorldNormal.xyz),
             NdotV,
-            armeParams.y,
-            armeParams.z,
+            roughness,
+            metalness,
             specularColor,
             specularScale,
             albedo.rgb
@@ -425,7 +455,7 @@ void main()
 
     // Modulate with albedo
     ambientDiffuse.rgb *= albedo.rgb;
-    ambientDiffuse.rgb *= armeParams.x;
+    ambientDiffuse.rgb *= ao;
 
 	//#ifndef LIGHTING
 	//	vec3 kD = vec3(1.0);
@@ -438,10 +468,15 @@ void main()
     //#ifdef LIGHTING
         #if defined(ENVMAP) || defined(PLANAR_REFLECTION)
 
+            //vec3 kD = mix(vec3(1.0) - F, vec3(0.0), armeParams.z);
+
             #ifdef ENVMAP
                 vec3 spec = SampleCubeMapLod(l_worldEyeToVert.xyz,
                                             finalWorldNormal,
-                                            envmapSampler, armeParams.y).rgb;
+                                            envmapSampler, perceptualRoughness).rgb;
+                #ifdef AMBIENT_LIGHT
+                    spec *= length(p3d_LightModel.ambient.rgb);
+                #endif
             #elif defined(PLANAR_REFLECTION)
                 vec2 reflCoords = l_texcoordReflection.xy / l_texcoordReflection.w;
                 vec3 spec = texture(reflectionSampler, reflCoords).rgb;
@@ -449,26 +484,27 @@ void main()
 
             // TODO: use a BRDF lookup texture in SHADERQUALITY_MEDIUM
             #if SHADER_QUALITY > SHADERQUALITY_LOW
-                vec3 iblspec = spec * EnvironmentBRDF(armeParams.y, NdotV, F);
+                vec2 specularBRDF = texture(brdfLut, vec2(NdotV, perceptualRoughness)).xy;
+                //vec3 brdf = EnvironmentBRDF(armeParams.y*armeParams.y, NdotV, F);
+                //vec3 iblspec = (specularColor * brdf.x + brdf.y) * spec;
+                vec3 iblspec = (specularColor * specularBRDF.x + specularBRDF.y) * spec;
             #else
                 vec3 iblspec = spec * F * specularColor;
             #endif
 
             specularLighting += iblspec * specularScale;
-
         #endif
     //#endif
 
-	vec3 totalAmbient = ambientDiffuse;
+    vec3 totalAmbient = ambientDiffuse + specularLighting;
     vec3 totalLight = totalAmbient + totalRadiance;
     #ifdef STATIC_PROP_LIGHTING
         totalLight *= l_staticVertexLighting;
     #endif
-
-    vec3 color = totalLight + specularLighting;
+    vec3 color = totalLight;
 
     #ifdef SELFILLUM
-        float selfillumMask = armeParams.w;
+        float selfillumMask = emission;
         color = mix(color, selfillumTint * albedo.rgb, selfillumMask);
     #endif
 
