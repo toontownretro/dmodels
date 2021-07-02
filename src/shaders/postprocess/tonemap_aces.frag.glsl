@@ -26,7 +26,7 @@ vec3 rtt_and_odt_fit(vec3 v) {
 
 void main() {
   o_color = textureLod(sceneTexture, l_texcoord, 0);
-  o_color.rgb = aces_input_mat * o_color.rgb;
+  o_color.rgb = transpose(aces_input_mat) * o_color.rgb;
   o_color.rgb = rtt_and_odt_fit(o_color.rgb);
-  o_color.rgb = aces_output_mat * o_color.rgb;
+  o_color.rgb = clamp(transpose(aces_output_mat) * o_color.rgb, 0, 1);
 }
