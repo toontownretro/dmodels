@@ -7,19 +7,21 @@ uniform sampler2D texSampler;
 uniform vec4 motionBlurParams[1];
 uniform vec4 consts[1];
 
-#define g_globalBlurVector motionBlurParams[0].xy
-#define g_fallingMotionIntensity motionBlurParams[0].z
-#define g_rollBlurIntensity motionBlurParams[0].w
-#define g_maxMotionBlur consts[0].x
-#define g_quality consts[0].y
+#define g_globalBlurVector (motionBlurParams[0].xy)
+#define g_fallingMotionIntensity (motionBlurParams[0].z)
+#define g_rollBlurIntensity (motionBlurParams[0].w)
+#define g_maxMotionBlur (consts[0].x)
+#define g_quality (consts[0].y)
 
 out vec4 outputColor;
 
 void main()
 {
+
     // Calculate blur vector
     vec2 fallingMotionBlurVector = ((l_texcoord * 2.0) - 1.0);
-    vec2 rollBlurVector = cross(vec3(fallingMotionBlurVector, 0.0), vec3(0, 0, 0)).xy;
+
+    vec2 rollBlurVector = cross(vec3(fallingMotionBlurVector, 0.0), vec3(0, 0, 1)).xy;
     vec2 globalBlurVector = g_globalBlurVector;
     globalBlurVector.y = -globalBlurVector.y;
 

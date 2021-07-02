@@ -41,8 +41,8 @@ float Tonemap_Uchimura(float x) {
 
 void main() {
   o_color = textureLod(sceneTexture, l_texcoord, 0);
-  o_color.rgb = vec3(
+  o_color.rgb = clamp(vec3(
     Tonemap_Uchimura(o_color.r),
     Tonemap_Uchimura(o_color.g),
-    Tonemap_Uchimura(o_color.b));
+    Tonemap_Uchimura(o_color.b)), 0, 1);
 }
