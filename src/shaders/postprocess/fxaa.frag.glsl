@@ -63,7 +63,7 @@ vec4 PostFX(sampler2D tex, vec2 uv)
   vec2 win_size=textureSize(sceneTexture, 0).xy;
   vec2 rcpFrame = vec2(1.0/win_size.x, 1.0/win_size.y);
   c.rgb = FxaaPixelShader(posPos, tex, rcpFrame);
-  c.a = 1.0;
+  c.a = textureLod(tex, uv, 0).a;
   return c;
 }
 

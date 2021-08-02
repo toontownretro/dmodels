@@ -9,5 +9,6 @@ out vec4 o_color;
 
 void main() {
   o_color = textureLod(sceneTexture, l_texcoord, 0);
-  o_color.rgb += textureLod(bloomTexture, l_texcoord, 0).rgb;
+  vec3 bloom = textureLod(bloomTexture, l_texcoord, 0).rgb;
+  o_color.rgb += bloom;
 }

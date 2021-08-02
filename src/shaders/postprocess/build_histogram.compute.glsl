@@ -44,7 +44,10 @@ void main() {
   if (gl_GlobalInvocationID.x < size.x && gl_GlobalInvocationID.y < size.y) {
     vec3 color = texelFetch(sceneImage, ivec2(gl_GlobalInvocationID.xy), 0).rgb;
     uint binIndex = colorToHistogramBin(color);
-    atomicAdd(localHistogram[binIndex], 1);
+    if (binIndex > 0) {
+      atomicAdd(localHistogram[binIndex], 1);
+    }
+
   }
 
   barrier();

@@ -293,6 +293,12 @@ float Fresnel4(vec3 vNormal, vec3 vEyeDir)
     return fresnel * fresnel;
 }
 
+float Fresnel(vec3 normal, vec3 eyeDir, float exponent)
+{
+    float fresnel = 1 - clamp(dot(normal, normalize(eyeDir)), 0, 1);
+    return pow(fresnel, exponent);
+}
+
 void DedicatedRimTerm(inout vec3 totalRim, vec3 worldNormal, vec3 worldEyeToVert,
                       vec3 ambientLight, float rimBoost, float rimExponent)
 {
@@ -302,7 +308,7 @@ void DedicatedRimTerm(inout vec3 totalRim, vec3 worldNormal, vec3 worldEyeToVert
     // =================================================
 
     vec3 up = vec3(0, 0, 1);
-    totalRim += ( (ambientLight * rimBoost) * Fresnel(worldNormal, worldEyeToVert) *
+    totalRim += ( (ambientLight * rimBoost) * Fresnel4(worldNormal, worldEyeToVert) *
                   max(0, dot(worldNormal, up)) );
 }
 

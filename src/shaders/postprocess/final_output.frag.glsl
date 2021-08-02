@@ -4,8 +4,8 @@ uniform sampler2D sceneColorSampler;
 
 in vec2 l_texcoord;
 
-out vec3 outputColor;
+out vec4 outputColor;
 
 void main() {
-  outputColor = texture(sceneColorSampler, l_texcoord).rgb;
+  outputColor = texture(sceneColorSampler, l_texcoord);
 }

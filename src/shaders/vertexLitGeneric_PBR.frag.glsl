@@ -354,14 +354,6 @@ void main()
         //    ambientDiffuse *= p3d_ExposureScale;
         //#endif
 
-        #ifdef RIMLIGHT
-            // Dedicated rim lighting for this pixel,
-            // adds onto final lighting, uses ambient light as basis
-            DedicatedRimTerm(params.totalRadiance, l_worldNormal.xyz,
-                             l_worldEyeToVert.xyz, ambientDiffuse,
-                             rimlightParams.x, rimlightParams.y);
-        #endif
-
         // Now factor in local light sources
         #ifdef BSP_LIGHTING
             int lightType;
@@ -453,17 +445,25 @@ void main()
 
     #endif // LIGHTING
 
+    vec3 specularLighting = vec3(0);
+
+    #if defined(RIMLIGHT) && defined(LIGHTING)
+        // Dedicated rim lighting for this pixel,
+        // adds onto final lighting, uses ambient light as basis
+        DedicatedRimTerm(specularLighting, l_worldNormal.xyz,
+                         l_worldEyeToVert.xyz, ambientDiffuse,
+                         rimlightParams.x, rimlightParams.y);
+    #endif
+
     // Modulate with albedo
     ambientDiffuse.rgb *= albedo.rgb;
     ambientDiffuse.rgb *= ao;
 
-	//#ifndef LIGHTING
-	//	vec3 kD = vec3(1.0);
-	//#else
-		vec3 F = Fresnel_Schlick(specularColor, NdotV);
-	//#endif
+    #if defined(FLAT_LIGHTMAP)
+        ambientDiffuse *= lightmapColor;
+    #endif
 
-    vec3 specularLighting = vec3(0);
+	vec3 F = Fresnel_Schlick(specularColor, NdotV);
 
     //#ifdef LIGHTING
         #if defined(ENVMAP) || defined(PLANAR_REFLECTION)
