@@ -38,7 +38,7 @@
 #if $[DMODELS_INSTALL]
   #define DMODELS_INSTALL $[unixfilename $[DMODELS_INSTALL]]
 #elif $[or $[CTPROJS],$[DMODELS]]
-  #set DMODELS $[unixfilename $[DMODELS]]
+  #define DMODELS $[unixfilename $[DMODELS]]
   #define DMODELS_INSTALL $[DMODELS]/built
   #if $[eq $[DMODELS],]
     #error You seem to be attached to some trees, but not DMODELS!
