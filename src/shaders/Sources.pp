@@ -26,6 +26,7 @@
     lightmappedGeneric_PBR.vert.glsl \
     skybox.frag.glsl \
     skybox.vert.glsl \
+    spriteParticle.vert.glsl spriteParticle.geom.glsl spriteParticle.frag.glsl \
     unlitNoMat.frag.glsl \
     unlitNoMat.vert.glsl \
     vertexLitGeneric_PBR.frag.glsl \
