@@ -1,2 +1,4 @@
-image smiley.rgb
-format srgb
+{
+  image smiley.rgb
+  format srgb
+}

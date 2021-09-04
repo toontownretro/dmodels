@@ -1,2 +1,4 @@
-image circle.png
-format srgb_alpha
+{
+  image circle.png
+  format srgb_alpha
+}

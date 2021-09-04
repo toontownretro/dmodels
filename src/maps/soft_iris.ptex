@@ -1,2 +1,4 @@
-image soft_iris.rgb
-format srgb_alpha
+{
+  image soft_iris.rgb
+  format srgb_alpha
+}

@@ -1,2 +1,4 @@
-image Dirlight.png
-format srgb_alpha
+{
+  image Dirlight.png
+  format srgb_alpha
+}

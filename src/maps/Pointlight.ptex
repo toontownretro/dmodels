@@ -1,2 +1,4 @@
-image Pointlight.png
-format srgb_alpha
+{
+  image Pointlight.png
+  format srgb_alpha
+}

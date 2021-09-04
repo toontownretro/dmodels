@@ -1,2 +1,4 @@
-image Spotlight.png
-format srgb_alpha
+{
+  image Spotlight.png
+  format srgb_alpha
+}

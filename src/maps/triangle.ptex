@@ -1,2 +1,4 @@
-image triangle.tif
-format srgb_alpha
+{
+  image triangle.tif
+  format srgb_alpha
+}

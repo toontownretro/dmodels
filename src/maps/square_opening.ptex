@@ -1,2 +1,4 @@
-image square_opening.tif
-format srgb_alpha
+{
+  image square_opening.tif
+  format srgb_alpha
+}
