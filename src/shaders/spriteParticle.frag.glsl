@@ -30,6 +30,8 @@ uniform sampler2D baseTextureSampler;
 uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];
 #endif
 
+uniform vec4 p3d_TexAlphaOnly;
+
 void
 main() {
   // Clipping first!
@@ -42,10 +44,16 @@ main() {
   }
 #endif
 
-  o_color = g_vertex_color;
 #ifdef BASETEXTURE
-  o_color *= texture(baseTextureSampler, g_tex_coord);
+  o_color = texture(baseTextureSampler, g_tex_coord);
+#else
+  o_color = vec4(1, 1, 1, 1);
 #endif
+
+  // Handle alpha-only textures.
+  o_color += p3d_TexAlphaOnly;
+
+  o_color *= g_vertex_color;
 
 #ifdef ALPHA_TEST
   if (!AlphaTest(o_color.a)) {
