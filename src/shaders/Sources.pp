@@ -24,6 +24,9 @@
     eyes.vert.glsl \
     lightmappedGeneric_PBR.frag.glsl \
     lightmappedGeneric_PBR.vert.glsl \
+    lm_buffers.inc.glsl lm_compute.inc.glsl \
+    lm_direct.compute.glsl \
+    lm_raster.frag.glsl lm_raster.vert.glsl \
     skybox.frag.glsl \
     skybox.vert.glsl \
     spriteParticle.vert.glsl spriteParticle.geom.glsl spriteParticle.frag.glsl \
