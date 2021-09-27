@@ -8,25 +8,18 @@
  * license.  You should have received a copy of this license along
  * with this source code in a file named "LICENSE."
  *
- * @file lm_direct.compute.glsl
+ * @file lm_unocclude.compute.glsl
  * @author lachbr
- * @date 2021-09-23
+ * @date 2021-09-24
  */
-
-// Compute shader for computing direct light into lightmaps.
-// Outputs direct lighting that hits a luxel as well as the light that
-// should reflect off the surface during the indirect pass.
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(rgba32f) uniform writeonly image2DArray luxel_direct;
-layout(rgba32f) uniform writeonly image2DArray luxel_reflectivity;
-uniform sampler2DArray luxel_albedo;
-uniform sampler2DArray luxel_position;
-uniform sampler2DArray luxel_normal;
+layout(rgba32f) uniform restrict image2DArray position;
+layout(rgba32f) uniform restrict readonly image2DArray unocclude;
 
 uniform ivec3 u_palette_size_page;
 #define u_palette_size (u_palette_size_page.xy)
@@ -40,8 +33,8 @@ uniform vec3 u_to_cell_offset;
 uniform vec3 u_to_cell_size;
 
 uint
-trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
-#if 1
+trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
+#if 0
   vec3 rel = p_to - p_from;
   float rel_len = length(rel);
   vec3 dir = normalize(rel);
@@ -59,7 +52,7 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
   vec3 side = (sign(rel_cell) * (vec3(icell) - from_cell) + (sign(rel_cell) * 0.5) + 0.5) * delta;
 
   uint iters = 0;
-  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size)))) {
+  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size))) && iters < 1000) {
     uvec2 cell_data = texelFetch(grid, icell, 0).xy;
     if (cell_data.x > 0) { // Triangle here.
       uint hit = RAY_MISS;
@@ -88,14 +81,32 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
         vec3 vtx1 = vert1.position;
         vec3 vtx2 = vert2.position;
 
+        ///
+        vec3 normal = -normalize(cross(vtx0 - vtx1, vtx0 - vtx2));
+        bool backface = dot(normal, dir) >= 0.0;
+        ///
+
         float distance;
         vec3 barycentric;
 
         if (ray_hits_triangle(p_from, dir, rel_len, u_bias, vtx0, vtx1, vtx2, distance, barycentric)) {
-          o_distance = distance;
-          o_bary = barycentric;
-          return RAY_CROSS; // Any hit good.
+          ///
+          if (!backface) {
+            distance = max(u_bias, distance - u_bias);
+          }
+
+          if (distance < best_distance) {
+            hit = backface ? RAY_BACK : RAY_FRONT;
+            best_distance = distance;
+            r_distance = distance;
+            r_normal = normal;
+          }
+          ///
         }
+      }
+
+      if (hit != RAY_MISS) {
+        return hit;
       }
     }
 
@@ -110,16 +121,19 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
     iters++;
   }
 #else
-
   vec3 rel = p_to - p_from;
   float rel_len = length(rel);
   vec3 dir = normalize(rel);
   vec3 inv_dir = 1.0 / dir;
 
   uint num_tris = get_num_lightmap_tris();
+  uint hit = RAY_MISS;
+  float best_distance = 1e20;
+  LightmapTri tri;
+  LightmapVertex vert0, vert1, vert2;
   for (uint tidx = 0; tidx < num_tris; tidx++) {
     // Ray-box test
-    LightmapTri tri = get_lightmap_tri(tidx);
+    get_lightmap_tri(tidx, tri);
     vec3 t0 = (tri.mins - p_from) * inv_dir;
     vec3 t1 = (tri.maxs - p_from) * inv_dir;
     vec3 tmin = min(t0, t1), tmax = max(t0, t1);
@@ -130,22 +144,36 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
     }
 
     // Prepare triangle vertices.
-    LightmapVertex vert0 = get_lightmap_vertex(tri.indices.x);
-    LightmapVertex vert1 = get_lightmap_vertex(tri.indices.y);
-    LightmapVertex vert2 = get_lightmap_vertex(tri.indices.z);
+    get_lightmap_vertex(tri.indices.x, vert0);
+    get_lightmap_vertex(tri.indices.y, vert1);
+    get_lightmap_vertex(tri.indices.z, vert2);
 
     vec3 vtx0 = vert0.position;
     vec3 vtx1 = vert1.position;
     vec3 vtx2 = vert2.position;
 
+    vec3 normal = normalize(cross(vtx1 - vtx0, vtx2 - vtx0));
+    bool backface = dot(normal, dir) >= 0.0;
+
     float dist;
     vec3 barycentric;
 
     if (ray_hits_triangle(p_from, dir, rel_len, u_bias, vtx0, vtx1, vtx2, dist, barycentric)) {
-      o_distance = dist;
-      o_bary = barycentric;
-      return RAY_CROSS; // Any hit good.
+      if (!backface) {
+        dist = max(u_bias, dist - u_bias);
+      }
+
+      if (dist < best_distance) {
+        hit = backface ? RAY_BACK : RAY_FRONT;
+        best_distance = dist;
+        r_distance = dist;
+        r_normal = normal;
+      }
     }
+  }
+
+  if (hit != RAY_MISS) {
+    return hit;
   }
 #endif
 
@@ -160,78 +188,48 @@ main() {
     return;
   }
 
-  //memoryBarrier();
-
   ivec3 palette_coord = ivec3(palette_pos, u_palette_page);
 
-  vec3 normal = texelFetch(luxel_normal, palette_coord, 0).xyz;
-  if (length(normal) < 0.5) {
-    // Empty luxel.
+  vec4 position_alpha = imageLoad(position, palette_coord);
+  if (position_alpha.a < 0.5) {
     return;
   }
-  normal = normalize(normal);
-  vec3 position = texelFetch(luxel_position, palette_coord, 0).xyz;
 
-  vec3 albedo = texelFetch(luxel_albedo, palette_coord, 0).xyz;
+  vec3 vertex_pos = position_alpha.xyz;
+  vec4 normal_tsize = imageLoad(unocclude, palette_coord);
 
+  vec3 face_normal = normal_tsize.xyz;
+  float texel_size = normal_tsize.w;
 
-  // Go trhough all lights
-  vec3 static_light = vec3(0.0);
-  vec3 dynamic_light = vec3(0.0);
-
-  vec4 sh_accum[4] = vec4[4](
-    vec4(0.0, 0.0, 0.0, 1.0),
-    vec4(0.0, 0.0, 0.0, 1.0),
-    vec4(0.0, 0.0, 0.0, 1.0),
-    vec4(0.0, 0.0, 0.0, 1.0)
-  );
-
-  uint light_count = uint(get_num_lightmap_lights());
-  for (uint i = 0; i < get_num_lightmap_lights(); i++) {
-    LightmapLight light = get_lightmap_light(i);
-
-    vec3 L;
-    float attenuation;
-    vec3 light_pos;
-
-    if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
-      attenuation = 1.0;
-      L = normalize(light.dir);
-      light_pos = position - light.dir * 9999999;
-
-    } else {
-      light_pos = light.pos;
-      L = light_pos - position;
-      float dist = length(L);
-      L = L / dist;
-
-      attenuation = 1.0 / (light.constant + (light.linear * dist) + (light.quadratic * dist * dist));
-
-      if (light.light_type == LIGHT_TYPE_SPOT) {
-        float cos_theta = dot(light.dir, -L);
-        float spot_atten = (cos_theta - light.stopdot2) * light.oodot;
-        spot_atten = max(0.0001, spot_atten);
-        spot_atten = pow(spot_atten, light.exponent);
-        spot_atten = clamp(spot_atten, 0, 1);
-        attenuation *= spot_atten;
-      }
-    }
-
-    if (attenuation <= 0.00001) {
-      continue;
-    }
-
-    float hit_dist;
-    vec3 bary;
-    if (trace_ray(position + (L * u_bias), light_pos, hit_dist, bary) == RAY_MISS) {
-      static_light += (attenuation * clamp(dot(normal, L), 0.0, 1.0)) * light.color.rgb;
-    } //else {
-      //static_light += hit_dist;
-    //}
+  vec3 x;
+  if (abs(normal.x) >= abs(normal.y) && abs(normal.x) >= abs(normal.z)) {
+    x = vec3(1, 0, 0);
+  } else if (abs(normal.y) >= abs(normal.z)) {
+    x = vec3(0, 1, 0);
+  } else {
+    x = vec3(0, 0, 1);
   }
 
-  imageStore(luxel_direct, palette_coord, vec4(static_light, 1.0));
+  vec3 v0 = (x == vec3(0, 0, 1)) ? vec3(1, 0, 0) : vec3(0, 0, 1);
+  vec3 tangent = normalize(cross(v0, face_normal));
+  vec3 bitangent = normalize(cross(tangent, face_normal));
+  vec3 base_pos = vertex_pos + face_normal * u_bias; // Raise a bit.
 
-  vec3 reflectivity = static_light * albedo; // + emission;
-  imageStore(luxel_reflectivity, palette_coord, vec4(reflectivity, 1.0));
+  vec3 rays[4] = vec3[4](tangent, bitangent, -tangent, -bitangent);
+  float min_d = 1e20;
+  for (int i = 0; i < 4; i++) {
+    vec3 ray_to = base_pos + rays[i] * texel_size;
+    float d;
+    vec3 norm;
+
+    if (trace_ray(base_pos, ray_to, d, norm) == RAY_FRONT) {
+      if (d < min_d) {
+        vertex_pos = base_pos + rays[i] * d + norm * u_bias * 10.0;
+        min_d = d;
+      }
+    }
+  }
+
+  position_alpha.xyz = vertex_pos;
+  imageStore(position, palette_coord, position_alpha);
 }

@@ -104,6 +104,6 @@ main() {
   }
 
   albedo_output = texture(baseTextureSampler, l_texcoord);
-  position_output = vec4(vertex_pos, 1.0);
+  position_output = vec4(vertex_pos, albedo_output.a);
   normal_output = vec4(normalize(l_world_normal), 1.0);
 }

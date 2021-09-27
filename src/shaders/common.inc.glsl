@@ -137,6 +137,40 @@ vec4 textureArrayBicubic(sampler2DArray sampler, vec3 texCoords) {
     , sy);
 }
 
+vec4 textureBicubic(sampler2D sampler, vec2 texCoords) {
+
+   vec2 texSize = textureSize(sampler, 0).xy;
+   vec2 invTexSize = 1.0 / texSize;
+
+   texCoords.xy = texCoords.xy * texSize - 0.5;
+
+
+    vec2 fxy = fract(texCoords.xy);
+    texCoords.xy -= fxy;
+
+    vec4 xcubic = cubic(fxy.x);
+    vec4 ycubic = cubic(fxy.y);
+
+    vec4 c = texCoords.xxyy + vec2 (-0.5, +1.5).xyxy;
+
+    vec4 s = vec4(xcubic.xz + xcubic.yw, ycubic.xz + ycubic.yw);
+    vec4 offset = c + vec4 (xcubic.yw, ycubic.yw) / s;
+
+    offset *= invTexSize.xxyy;
+
+    vec4 sample0 = texture(sampler, offset.xz);
+    vec4 sample1 = texture(sampler, offset.yz);
+    vec4 sample2 = texture(sampler, offset.xw);
+    vec4 sample3 = texture(sampler, offset.yw);
+
+    float sx = s.x / (s.x + s.y);
+    float sy = s.z / (s.z + s.w);
+
+    return mix(
+       mix(sample3, sample2, sx), mix(sample1, sample0, sx)
+    , sy);
+}
+
 vec3 WorldToTangent(vec3 worldVector, vec3 worldNormal, vec3 worldTangent, vec3 worldBinormal) {
     vec3 tangentVector = vec3(0);
     tangentVector.x = dot(worldVector, worldTangent);

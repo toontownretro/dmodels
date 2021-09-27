@@ -21,24 +21,24 @@ bool
 ray_hits_triangle(vec3 from, vec3 dir, float max_dist, float bias, vec3 p0,
                   vec3 p1, vec3 p2, out float dist, out vec3 barycentric) {
   const vec3 e0 = p1 - p0;
-  const vec3 e1 = p0 - p2;
-  vec3 triangle_normal = cross(e1, e0);
+	const vec3 e1 = p0 - p2;
+	vec3 triangle_normal = cross(e1, e0);
 
-  float n_dot_dir = dot(triangle_normal, dir);
+	float n_dot_dir = dot(triangle_normal, dir);
 
-  if (abs(n_dot_dir) < 0.01) {
-    return false;
-  }
+	if (abs(n_dot_dir) < 0.01) {
+		return false;
+	}
 
-  const vec3 e2 = (p0 - from) / n_dot_dir;
-  const vec3 i = cross(dir, e2);
+	const vec3 e2 = (p0 - from) / n_dot_dir;
+	const vec3 i = cross(dir, e2);
 
-  barycentric.y = dot(i, e1);
-  barycentric.z = dot(i, e0);
-  barycentric.x = 1.0 - (barycentric.z + barycentric.y);
-  dist = dot(triangle_normal, e2);
+	barycentric.y = dot(i, e1);
+	barycentric.z = dot(i, e0);
+	barycentric.x = 1.0 - (barycentric.z + barycentric.y);
+	dist = dot(triangle_normal, e2);
 
-  return (dist > bias) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
+	return (dist > bias) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
 }
 
 #define RAY_MISS 0
