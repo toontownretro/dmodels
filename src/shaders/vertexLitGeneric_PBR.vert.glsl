@@ -71,6 +71,11 @@ out vec4 l_vertexColor;
 in vec4 texcoord;
 out vec4 l_texcoord;
 
+#ifdef HAS_LIGHTMAP
+in vec2 texcoord_lightmap;
+out vec2 l_texcoordLightmap;
+#endif
+
 #if defined(HAS_SHADOW_SUNLIGHT) || defined(HAS_SHADOWED_LIGHT)
     uniform struct p3d_LightSourceParameters {
         vec4 color;
@@ -184,5 +189,9 @@ void main()
 
     #ifdef PLANAR_REFLECTION
         l_texcoordReflection = scale_mat * gl_Position;
+    #endif
+
+    #ifdef HAS_LIGHTMAP
+        l_texcoordLightmap = texcoord_lightmap;
     #endif
 }

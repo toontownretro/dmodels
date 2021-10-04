@@ -193,6 +193,11 @@ uniform vec4 p3d_ColorScale;
     uniform sampler2D reflectionSampler;
 #endif
 
+#ifdef HAS_LIGHTMAP
+    in vec2 l_texcoordLightmap;
+    uniform sampler2D lightmapSampler;
+#endif
+
 uniform vec4 p3d_TexAlphaOnly;
 
 layout(location = COLOR_LOCATION) out vec4 outputColor;
@@ -236,6 +241,10 @@ void main()
     // Explicit alpha value from material.
     #ifdef ALPHA
         albedo.a *= ALPHA;
+    #endif
+
+    #ifdef HAS_LIGHTMAP
+        albedo.rgb *= textureBicubic(lightmapSampler, l_texcoordLightmap).rgb;
     #endif
 
     #ifdef ALPHA_TEST
