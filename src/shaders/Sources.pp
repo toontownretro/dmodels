@@ -27,6 +27,7 @@
     lm_buffers.inc.glsl lm_compute.inc.glsl \
     lm_direct.compute.glsl lm_indirect.compute.glsl lm_unocclude.compute.glsl \
     lm_raster.frag.glsl lm_raster.vert.glsl \
+    lm_dilate.compute.glsl \
     skybox.frag.glsl \
     skybox.vert.glsl \
     spriteParticle.vert.glsl spriteParticle.geom.glsl spriteParticle.frag.glsl \

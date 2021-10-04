@@ -16,7 +16,7 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_buffers.inc.glsl"
 
-uniform sampler2D baseTextureSampler;
+uniform sampler2D base_texture_sampler;
 
 in vec2 l_texcoord;
 in vec2 l_texcoord_lightmap;
@@ -103,7 +103,7 @@ main() {
     unocclude_output.w = texel_size;
   }
 
-  albedo_output = texture(baseTextureSampler, l_texcoord);
+  albedo_output = texture(base_texture_sampler, l_texcoord);
   position_output = vec4(vertex_pos, albedo_output.a);
   normal_output = vec4(normalize(l_world_normal), 1.0);
 }

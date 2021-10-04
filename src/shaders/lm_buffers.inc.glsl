@@ -28,27 +28,43 @@ uniform samplerBuffer vertices;
  * Unpacks the ith lightmap vertex from the vertex buffer.
  */
 LightmapVertex get_lightmap_vertex(uint i) {
-  int start = int(i) * 3;
+  int start = int(i) * 2;
+
   LightmapVertex v;
-  v.position = texelFetch(vertices, start).xyz;
-  v.normal = texelFetch(vertices, start + 1).xyz;
-  v.uv = texelFetch(vertices, start + 2).xy;
+
+  vec4 pos_u = texelFetch(vertices, start);
+  vec4 normal_v = texelFetch(vertices, start + 1);
+
+  v.position = pos_u.xyz;
+
+  v.normal = normal_v.xyz;
+
+  v.uv.x = pos_u.w;
+  v.uv.y = normal_v.w;
+
   return v;
 }
 
 void
 get_lightmap_vertex(uint i, out LightmapVertex v) {
-  int start = int(i) * 3;
-  v.position = texelFetch(vertices, start).xyz;
-  v.normal = texelFetch(vertices, start + 1).xyz;
-  v.uv = texelFetch(vertices, start + 2).xy;
+  int start = int(i) * 2;
+
+  vec4 pos_u = texelFetch(vertices, start);
+  vec4 normal_v = texelFetch(vertices, start + 1);
+
+  v.position = pos_u.xyz;
+
+  v.normal = normal_v.xyz;
+
+  v.uv.x = pos_u.w;
+  v.uv.y = normal_v.w;
 }
 
 /**
  * Returns the number of lightmap vertices stored in the buffer.
  */
 int get_num_lightmap_vertices() {
-  return textureSize(vertices) / 3;
+  return textureSize(vertices) / 2;
 }
 
 struct LightmapTri {
@@ -56,6 +72,7 @@ struct LightmapTri {
   vec3 mins;
   vec3 maxs;
   uint page;
+  uint contents;
 };
 uniform samplerBuffer triangles;
 
@@ -71,7 +88,9 @@ get_lightmap_tri(uint i) {
   tri.indices.y = uint(indices_page.y);
   tri.indices.z = uint(indices_page.z);
   tri.page = uint(indices_page.w);
-  tri.mins = texelFetch(triangles, start + 1).xyz;
+  vec4 mins_contents = texelFetch(triangles, start + 1);
+  tri.mins = mins_contents.xyz;
+  tri.contents = uint(mins_contents.w);
   tri.maxs = texelFetch(triangles, start + 2).xyz;
   return tri;
 }
@@ -84,7 +103,9 @@ get_lightmap_tri(uint i, out LightmapTri tri) {
   tri.indices.y = uint(indices_page.y);
   tri.indices.z = uint(indices_page.z);
   tri.page = uint(indices_page.w);
-  tri.mins = texelFetch(triangles, start + 1).xyz;
+  vec4 mins_contents = texelFetch(triangles, start + 1);
+  tri.mins = mins_contents.xyz;
+  tri.contents = uint(mins_contents.w);
   tri.maxs = texelFetch(triangles, start + 2).xyz;
 }
 

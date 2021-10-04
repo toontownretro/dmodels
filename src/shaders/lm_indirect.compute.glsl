@@ -24,6 +24,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 // Computed in the direct pass.
 uniform sampler2DArray luxel_reflectivity;
 
+uniform sampler2DArray luxel_albedo;
 uniform sampler2DArray luxel_normal;
 uniform sampler2DArray luxel_position;
 
@@ -34,9 +35,10 @@ layout(rgba32f) uniform image2DArray luxel_indirect_accum;
 
 layout(rgba32f) uniform image2DArray luxel_light;
 
-uniform ivec3 u_palette_size_page;
-#define u_palette_size (u_palette_size_page.xy)
-#define u_palette_page (u_palette_size_page.z)
+uniform ivec4 u_palette_size_page_bounce;
+#define u_palette_size (u_palette_size_page_bounce.xy)
+#define u_palette_page (u_palette_size_page_bounce.z)
+#define u_bounce (u_palette_size_page_bounce.w)
 uniform ivec3 u_region_ofs_grid_size;
 #define u_region_ofs (u_region_ofs_grid_size.xy)
 #define u_grid_size (u_region_ofs_grid_size.z)
@@ -49,6 +51,8 @@ uniform ivec3 u_ray_params;
 #define u_ray_from (u_ray_params.x)
 #define u_ray_to (u_ray_params.y)
 #define u_ray_count (u_ray_params.z)
+
+uniform vec3 u_sky_color;
 
 uint
 trace_ray(vec3 p_from, vec3 p_to, out uint r_triangle, out vec3 r_barycentric) {
@@ -73,7 +77,7 @@ trace_ray(vec3 p_from, vec3 p_to, out uint r_triangle, out vec3 r_barycentric) {
   LightmapVertex vert0, vert1, vert2;
 
   uint iters = 0;
-  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size))) && iters < 1000) {
+  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size)))) {
     uvec2 cell_data = texelFetch(grid, icell, 0).xy;
     if (cell_data.x > 0) { // Triangle here.
       uint hit = RAY_MISS;
@@ -114,10 +118,16 @@ trace_ray(vec3 p_from, vec3 p_to, out uint r_triangle, out vec3 r_barycentric) {
           }
 
           if (dist < best_distance) {
-            hit = backface ? RAY_BACK : RAY_FRONT;
-            best_distance = dist;
-            r_triangle = tidx;
-            r_barycentric = barycentric;
+            // Check alpha value at uv coordinate.
+            vec3 uvw = vec3(barycentric.x * vert0.uv + barycentric.y * vert1.uv + barycentric.z * vert2.uv, float(triangle.page));
+            float alpha = textureLod(luxel_albedo, uvw, 0.0).a;
+            // Accept hit if alpha is >= 0.5 so we can do alpha texture shadows.
+            if (alpha >= 0.5) {
+              hit = backface ? RAY_BACK : RAY_FRONT;
+              best_distance = dist;
+              r_triangle = tidx;
+              r_barycentric = barycentric;
+            }
           }
         }
       }
@@ -251,15 +261,16 @@ main() {
   vec3 position = texelFetch(luxel_position, palette_coord, 0).xyz;
 
   vec3 x;
+  bool is_z = false;
   if (abs(normal.x) >= abs(normal.y) && abs(normal.x) >= abs(normal.z)) {
-    x = vec3(1, 0, 0);
+
   } else if (abs(normal.y) >= abs(normal.z)) {
-    x = vec3(0, 1, 0);
+
   } else {
-    x = vec3(0, 0, 1);
+    is_z = true;
   }
 
-  vec3 v0 = (x == vec3(0, 0, 1)) ? vec3(1, 0, 0) : vec3(0, 0, 1);
+  vec3 v0 = is_z ? vec3(1, 0, 0) : vec3(0, 0, 1);
   vec3 tangent = normalize(cross(v0, normal));
   vec3 bitangent = normalize(cross(tangent, normal));
   mat3 normal_mat = mat3(tangent, bitangent, normal);
@@ -267,7 +278,7 @@ main() {
   vec3 light_average = vec3(0);
   float active_rays = 0.0;
   for (uint i = u_ray_from; i < u_ray_to; i++) {
-    vec3 ray_dir = normal_mat * vogel_hemisphere(i, u_ray_count, noise(vec2(palette_pos)));
+    vec3 ray_dir = normal_mat * vogel_hemisphere(i, u_ray_count, quick_hash(vec2(palette_pos)));
 
     uint tidx;
     vec3 barycentric;
@@ -289,6 +300,11 @@ main() {
       light = textureLod(luxel_reflectivity, uvw, 0.0).rgb;
       active_rays += 1.0;
 
+    } else if (trace_result == RAY_MISS && u_bounce == 0) {
+      // If we hit nothing, we actually hit the sky.  Bring in sky color,
+      // but only on the first bonuce.
+      light = u_sky_color;
+      active_rays += 1.0;
     }
 
     light_average += light;

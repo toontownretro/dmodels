@@ -39,6 +39,13 @@ uniform vec2 u_bias_;
 uniform vec3 u_to_cell_offset;
 uniform vec3 u_to_cell_size;
 
+vec2 rand(vec2 co){
+    return vec2(
+        fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453),
+        fract(cos(dot(co.yx ,vec2(8.64947,45.097))) * 43758.5453)
+    )*2.0-1.0;
+}
+
 uint
 trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
 #if 1
@@ -92,9 +99,15 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
         vec3 barycentric;
 
         if (ray_hits_triangle(p_from, dir, rel_len, u_bias, vtx0, vtx1, vtx2, distance, barycentric)) {
-          o_distance = distance;
-          o_bary = barycentric;
-          return RAY_CROSS; // Any hit good.
+          // Check alpha value at uv coordinate.
+          vec3 uvw = vec3(barycentric.x * vert0.uv + barycentric.y * vert1.uv + barycentric.z * vert2.uv, float(triangle.page));
+          float alpha = textureLod(luxel_albedo, uvw, 0.0).a;
+          // Accept hit if alpha is >= 0.5 so we can do alpha texture shadows.
+          if (alpha >= 0.5) {
+            o_distance = distance;
+            o_bary = barycentric;
+            return RAY_CROSS;
+          }
         }
       }
     }
@@ -124,10 +137,10 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
     vec3 t1 = (tri.maxs - p_from) * inv_dir;
     vec3 tmin = min(t0, t1), tmax = max(t0, t1);
 
-    if (max(tmin.x, max(tmin.y, tmin.z)) > min(tmax.x, min(tmax.y, tmax.z))) {
+    //if (max(tmin.x, max(tmin.y, tmin.z)) > min(tmax.x, min(tmax.y, tmax.z))) {
       // Ray-box failed.
-      continue;
-    }
+    //  continue;
+    //}
 
     // Prepare triangle vertices.
     LightmapVertex vert0 = get_lightmap_vertex(tri.indices.x);
@@ -187,7 +200,7 @@ main() {
   );
 
   uint light_count = uint(get_num_lightmap_lights());
-  for (uint i = 0; i < get_num_lightmap_lights(); i++) {
+  for (uint i = 0; i < light_count; i++) {
     LightmapLight light = get_lightmap_light(i);
 
     vec3 L;
@@ -196,7 +209,7 @@ main() {
 
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
       attenuation = 1.0;
-      L = normalize(light.dir);
+      L = normalize(-light.dir);
       light_pos = position - light.dir * 9999999;
 
     } else {
@@ -217,14 +230,52 @@ main() {
       }
     }
 
-    if (attenuation <= 0.00001) {
+    float NdotL = clamp(dot(normal, L), 0.0, 1.0);
+    attenuation *= NdotL;
+
+    if (attenuation == 0.0) {
       continue;
     }
 
+    //if (attenuation <= 0.00001) {
+    //  continue;
+    //}
+
     float hit_dist;
     vec3 bary;
-    if (trace_ray(position + (L * u_bias), light_pos, hit_dist, bary) == RAY_MISS) {
-      static_light += (attenuation * clamp(dot(normal, L), 0.0, 1.0)) * light.color.rgb;
+
+    /*if (light.light_type == LIGHT_TYPE_POINT || light.light_type == LIGHT_TYPE_SPOT) {
+      // For points and spot lights.  Pick several random points along a quad
+      // oriented in the direction of the light and trace a ray to each point,
+      // averaging the shadow values for all rays.
+      float active_rays = 0.0;
+      bool is_z = false;
+      if (abs(L.x) >= abs(L.y) && abs(L.x) >= abs(L.z)) {
+
+      } else if (abs(L.y) >= abs(L.z)) {
+
+      } else {
+        is_z = true;
+      }
+      vec3 v0 = is_z ? vec3(1, 0, 0) : vec3(0, 0, 1);
+      vec3 tangent = normalize(cross(v0, -L));
+      vec3 binormal = normalize(cross(tangent, -L));
+      for (int j = 0; j < 36; j++) {
+        float x = j / 6;
+        float y = float(j % 6);
+        vec2 ofs = rand(vec2(x, y)) * 8.0;
+        vec3 ray_to = light_pos;
+        ray_to += tangent * ofs.x;
+        ray_to += binormal * ofs.y;
+        if (trace_ray(position + (L * u_bias), ray_to, hit_dist, bary) == RAY_MISS) {
+          active_rays += 1.0;
+        }
+      }
+      attenuation *= (active_rays / 64.0);
+      static_light += attenuation * light.color.rgb;
+
+    } else*/ if (trace_ray(position + (L * u_bias), light_pos, hit_dist, bary) == RAY_MISS) {
+      static_light += attenuation * light.color.rgb;
     } //else {
       //static_light += hit_dist;
     //}

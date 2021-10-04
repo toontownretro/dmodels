@@ -34,6 +34,8 @@ out vec4 l_color;
 flat out uvec3 vertex_indices;
 flat out vec3 face_normal;
 
+uniform vec2 u_uv_offset;
+
 void
 main() {
   // NOTE: This requires non-indexed geometry.
@@ -62,11 +64,13 @@ main() {
   l_world_position = tri_verts[triangle_local_idx].position;
   l_world_normal = tri_verts[triangle_local_idx].normal;
   l_texcoord_lightmap = tri_verts[triangle_local_idx].uv;
+  l_texcoord_lightmap += u_uv_offset;
+  l_texcoord_lightmap = clamp(l_texcoord_lightmap, 0, 1);
   l_texcoord = texcoord;
 
-  face_normal = -normalize(
-    cross(tri_verts[0].position - tri_verts[1].position,
-          tri_verts[0].position - tri_verts[2].position));
+  face_normal = normalize(
+    cross(tri_verts[1].position - tri_verts[0].position,
+          tri_verts[2].position - tri_verts[0].position));
 
   // Output the lightmap coordinate as the clip-space position for the vertex.
   gl_Position = vec4(l_texcoord_lightmap * 2.0 - 1.0, 0.0001, 1);

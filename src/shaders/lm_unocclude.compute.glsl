@@ -34,7 +34,7 @@ uniform vec3 u_to_cell_size;
 
 uint
 trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
-#if 0
+#if 1
   vec3 rel = p_to - p_from;
   float rel_len = length(rel);
   vec3 dir = normalize(rel);
@@ -51,8 +51,11 @@ trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
   ivec3 step = ivec3(sign(rel_cell));
   vec3 side = (sign(rel_cell) * (vec3(icell) - from_cell) + (sign(rel_cell) * 0.5) + 0.5) * delta;
 
+  LightmapTri triangle;
+  LightmapVertex vert0, vert1, vert2;
+
   uint iters = 0;
-  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size))) && iters < 1000) {
+  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size)))) {
     uvec2 cell_data = texelFetch(grid, icell, 0).xy;
     if (cell_data.x > 0) { // Triangle here.
       uint hit = RAY_MISS;
@@ -62,7 +65,7 @@ trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
         uint tidx = get_tri_for_cell(int(cell_data.y + i));
 
         // Ray-box test
-        LightmapTri triangle = get_lightmap_tri(tidx);
+        get_lightmap_tri(tidx, triangle);
         vec3 t0 = (triangle.mins - p_from) * inv_dir;
         vec3 t1 = (triangle.maxs - p_from) * inv_dir;
         vec3 tmin = min(t0, t1), tmax = max(t0, t1);
@@ -73,16 +76,16 @@ trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
         }
 
         // Prepare triangle vertices.
-        LightmapVertex vert0 = get_lightmap_vertex(triangle.indices.x);
-        LightmapVertex vert1 = get_lightmap_vertex(triangle.indices.y);
-        LightmapVertex vert2 = get_lightmap_vertex(triangle.indices.z);
+        get_lightmap_vertex(triangle.indices.x, vert0);
+        get_lightmap_vertex(triangle.indices.y, vert1);
+        get_lightmap_vertex(triangle.indices.z, vert2);
 
         vec3 vtx0 = vert0.position;
         vec3 vtx1 = vert1.position;
         vec3 vtx2 = vert2.position;
 
         ///
-        vec3 normal = -normalize(cross(vtx0 - vtx1, vtx0 - vtx2));
+        vec3 normal = normalize(cross(vtx1 - vtx0, vtx2 - vtx0));
         bool backface = dot(normal, dir) >= 0.0;
         ///
 
@@ -198,19 +201,19 @@ main() {
   vec3 vertex_pos = position_alpha.xyz;
   vec4 normal_tsize = imageLoad(unocclude, palette_coord);
 
-  vec3 face_normal = normal_tsize.xyz;
+  vec3 face_normal = normalize(normal_tsize.xyz);
   float texel_size = normal_tsize.w;
 
-  vec3 x;
-  if (abs(normal.x) >= abs(normal.y) && abs(normal.x) >= abs(normal.z)) {
-    x = vec3(1, 0, 0);
-  } else if (abs(normal.y) >= abs(normal.z)) {
-    x = vec3(0, 1, 0);
+  bool is_z = false;
+  if (abs(face_normal.x) >= abs(face_normal.y) && abs(face_normal.x) >= abs(face_normal.z)) {
+
+  } else if (abs(face_normal.y) >= abs(face_normal.z)) {
+
   } else {
-    x = vec3(0, 0, 1);
+    is_z = true;
   }
 
-  vec3 v0 = (x == vec3(0, 0, 1)) ? vec3(1, 0, 0) : vec3(0, 0, 1);
+  vec3 v0 = is_z ? vec3(1, 0, 0) : vec3(0, 0, 1);
   vec3 tangent = normalize(cross(v0, face_normal));
   vec3 bitangent = normalize(cross(tangent, face_normal));
   vec3 base_pos = vertex_pos + face_normal * u_bias; // Raise a bit.
@@ -222,9 +225,9 @@ main() {
     float d;
     vec3 norm;
 
-    if (trace_ray(base_pos, ray_to, d, norm) == RAY_FRONT) {
+    if (trace_ray(base_pos, ray_to, d, norm) == RAY_BACK) {
       if (d < min_d) {
-        vertex_pos = base_pos + rays[i] * d + norm * u_bias * 10.0;
+        vertex_pos = base_pos + rays[i] * d + norm * u_bias * 160;
         min_d = d;
       }
     }
