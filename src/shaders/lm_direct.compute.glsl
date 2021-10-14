@@ -27,6 +27,7 @@ layout(rgba32f) uniform writeonly image2DArray luxel_reflectivity;
 uniform sampler2DArray luxel_albedo;
 uniform sampler2DArray luxel_position;
 uniform sampler2DArray luxel_normal;
+uniform sampler2DArray luxel_emission;
 
 uniform ivec3 u_palette_size_page;
 #define u_palette_size (u_palette_size_page.xy)
@@ -186,6 +187,7 @@ main() {
   vec3 position = texelFetch(luxel_position, palette_coord, 0).xyz;
 
   vec3 albedo = texelFetch(luxel_albedo, palette_coord, 0).xyz;
+  vec3 emission = texelFetch(luxel_emission, palette_coord, 0).xyz;
 
 
   // Go trhough all lights
@@ -283,6 +285,6 @@ main() {
 
   imageStore(luxel_direct, palette_coord, vec4(static_light, 1.0));
 
-  vec3 reflectivity = static_light * albedo; // + emission;
+  vec3 reflectivity = static_light * albedo + emission;
   imageStore(luxel_reflectivity, palette_coord, vec4(reflectivity, 1.0));
 }

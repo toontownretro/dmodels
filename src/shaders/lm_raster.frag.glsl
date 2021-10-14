@@ -17,6 +17,7 @@
 #include "shaders/lm_buffers.inc.glsl"
 
 uniform sampler2D base_texture_sampler;
+uniform vec3 emission_color;
 
 in vec2 l_texcoord;
 in vec2 l_texcoord_lightmap;
@@ -31,6 +32,7 @@ layout(location = 0) out vec4 albedo_output;
 layout(location = 1) out vec4 position_output;
 layout(location = 2) out vec4 normal_output;
 layout(location = 3) out vec4 unocclude_output;
+layout(location = 4) out vec4 emission_output;
 
 void
 main() {
@@ -106,4 +108,5 @@ main() {
   albedo_output = texture(base_texture_sampler, l_texcoord);
   position_output = vec4(vertex_pos, albedo_output.a);
   normal_output = vec4(normalize(l_world_normal), 1.0);
+  emission_output = vec4(emission_color, 1.0);
 }
