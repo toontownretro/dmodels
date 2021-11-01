@@ -36,9 +36,7 @@ void DoHardwareAnimation(inout vec4 finalVertex, inout vec3 finalNormal, vec4 ve
     ;
 
     finalVertex = matrix * vertexPos;
-    #if defined(NEED_WORLD_NORMAL) || defined(NEED_EYE_NORMAL)
-      finalNormal = mat3(matrix) * normal;
-    #endif
+    finalNormal = mat3(matrix) * normal;
 
   #endif
 }

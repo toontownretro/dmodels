@@ -44,6 +44,8 @@
 
 #pragma optionNV(unroll all)
 
+//#define HALFLAMBERT 1
+
 #include "shaders/common_lighting_frag.inc.glsl"
 #include "shaders/common_fog_frag.inc.glsl"
 #include "shaders/common_frag.inc.glsl"
@@ -139,35 +141,23 @@ uniform vec4 p3d_ColorScale;
 
 #ifdef LIGHTING
 
-    #ifdef BSP_LIGHTING
-
-        uniform int lightTypes[NUM_LIGHTS];
-        uniform int lightCount[1];
-        uniform mat4 lightData[NUM_LIGHTS];
-        uniform mat4 lightData2[NUM_LIGHTS];
-        uniform vec3 ambientCube[6];
-
-    #else // BSP_LIGHTING
-
-        uniform struct p3d_LightSourceParameters {
-            vec4 color;
-            vec4 position;
-            vec4 direction;
-            vec4 spotParams;
-            vec3 attenuation;
-            #ifdef HAS_SHADOWED_LIGHT
-                mat4 shadowViewMatrix;
-                float hasShadows;
-                #ifdef HAS_SHADOWED_POINT_LIGHT
-                    samplerCube shadowMapCube;
-                #endif
-                #ifdef HAS_SHADOWED_SPOTLIGHT
-                    sampler2D shadowMap2D;
-                #endif
+    uniform struct p3d_LightSourceParameters {
+        vec4 color;
+        vec4 position;
+        vec4 direction;
+        vec4 spotParams;
+        vec3 attenuation;
+        #ifdef HAS_SHADOWED_LIGHT
+            mat4 shadowViewMatrix;
+            float hasShadows;
+            #ifdef HAS_SHADOWED_POINT_LIGHT
+                samplerCube shadowMapCube;
             #endif
-        } p3d_LightSource[NUM_LIGHTS];
-
-    #endif // BSP_LIGHTING
+            #ifdef HAS_SHADOWED_SPOTLIGHT
+                sampler2D shadowMap2D;
+            #endif
+        #endif
+    } p3d_LightSource[NUM_LIGHTS];
 
     #ifdef HAS_SHADOW_SUNLIGHT
         uniform sampler2DArray p3d_CascadeShadowMap;
@@ -186,7 +176,10 @@ uniform vec4 p3d_ColorScale;
     uniform struct {
       vec4 ambient;
     } p3d_LightModel;
-#endif // AMBIENT_LIGHT
+
+#elif defined(AMBIENT_PROBE)
+    uniform vec3 ambientProbe[9];
+#endif
 
 #ifdef PLANAR_REFLECTION
     in vec4 l_texcoordReflection;
@@ -212,6 +205,17 @@ layout(location = COLOR_LOCATION) out vec4 outputColor;
 #ifdef NEED_AUX_BLOOM
     layout(location = AUX_BLOOM_LOCATION) out vec4 o_aux_bloom;
 #endif
+
+// Monte Carlo integration, approximate analytic version based on Dimitar Lazarov's work
+// https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile
+vec3 envBRDFApprox(vec3 SpecularColor, float Roughness, float NoV) {
+  const vec4 c0 = vec4(-1, -0.0275, -0.572, 0.022);
+  const vec4 c1 = vec4(1, 0.0425, 1.04, -0.04);
+  vec4 r = Roughness * c0 + c1;
+  float a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
+  vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
+  return SpecularColor * AB.x + AB.y;
+}
 
 void main()
 {
@@ -241,10 +245,6 @@ void main()
     // Explicit alpha value from material.
     #ifdef ALPHA
         albedo.a *= ALPHA;
-    #endif
-
-    #ifdef HAS_LIGHTMAP
-        albedo.rgb *= textureBicubic(lightmapSampler, l_texcoordLightmap).rgb;
     #endif
 
     #ifdef ALPHA_TEST
@@ -282,7 +282,7 @@ void main()
     #endif
 
     #ifdef NEED_WORLD_NORMAL
-        float NdotV = max(0.0, dot(finalWorldNormal.xyz, normalize(l_worldEyeToVert.xyz)));
+        float NdotV = abs(dot(finalWorldNormal.xyz, normalize(l_worldEyeToVert.xyz))) + 0.001;
     #else
         float NdotV = 1.0;
     #endif
@@ -350,10 +350,28 @@ void main()
             );
 
         vec3 ambientDiffuse = vec3(0, 0, 0);
-        #ifdef BSP_LIGHTING
-            ambientDiffuse += AmbientCubeLight(finalWorldNormal.xyz, ambientCube);
-        #elif defined(AMBIENT_LIGHT)
+
+        #if defined(AMBIENT_LIGHT)
             ambientDiffuse += p3d_LightModel.ambient.rgb;
+
+        #elif defined(AMBIENT_PROBE)
+            // Evaluate spherical harmonics.
+            vec3 wnormal = finalWorldNormal.xyz;
+            const float c1 = 0.429043;
+            const float c2 = 0.511664;
+            const float c3 = 0.743125;
+            const float c4 = 0.886227;
+            const float c5 = 0.247708;
+            ambientDiffuse += (c1 * ambientProbe[8] * (wnormal.x * wnormal.x - wnormal.y * wnormal.y) +
+                               c3 * ambientProbe[6] * wnormal.z * wnormal.z +
+                               c4 * ambientProbe[0] -
+                               c5 * ambientProbe[6] +
+                               2.0 * c1 * ambientProbe[4] * wnormal.x * wnormal.y +
+                               2.0 * c1 * ambientProbe[7] * wnormal.x * wnormal.z +
+                               2.0 * c1 * ambientProbe[5] * wnormal.y * wnormal.z +
+                               2.0 * c2 * ambientProbe[3] * wnormal.x +
+                               2.0 * c2 * ambientProbe[1] * wnormal.y +
+                               2.0 * c2 * ambientProbe[2] * wnormal.z);
         #endif
 
         // Multiply the ambient level by the exposure scale.  I don't know if
@@ -364,40 +382,21 @@ void main()
         //#endif
 
         // Now factor in local light sources
-        #ifdef BSP_LIGHTING
-            int lightType;
-            for (int i = 0; i < lightCount[0]; i++)
-        #else
-            for (int i = 0; i < NUM_LIGHTS; i++)
-        #endif
+        for (int i = 0; i < NUM_LIGHTS; i++)
         {
-            #ifdef BSP_LIGHTING
-                params.lPos = lightData[i][0];
-                params.lDir = lightData[i][1];
-                params.lAtten = lightData[i][2];
-                params.lColor = lightData[i][3];
-                //params.falloff2 = lightData2[i][0];
-                //params.falloff3 = lightData2[i][1];
-                lightType = lightTypes[i];
-            #else
-                params.lColor = p3d_LightSource[i].color;
-                bool isDirectional = p3d_LightSource[i].color.w == 1.0;
-                bool isSpot = p3d_LightSource[i].direction.w == 1.0;
-                bool isPoint = (!isDirectional && !isSpot);
-                params.lPos = p3d_LightSource[i].position;
-                params.lDir = normalize(p3d_LightSource[i].direction);
-                params.lAtten = vec4(p3d_LightSource[i].attenuation, 0.0);
-                params.lSpotParams = p3d_LightSource[i].spotParams;
-                #if HAS_SHADOWED_LIGHT
-                    bool hasShadows = int(p3d_LightSource[i].hasShadows) == 1;
-                #endif
-            #endif // BSP_LIGHTING
-
-            #ifdef BSP_LIGHTING
-                if (lightType == LIGHTTYPE_DIRECTIONAL)
-            #else
-                if (isDirectional)
+            params.lColor = p3d_LightSource[i].color;
+            bool isDirectional = p3d_LightSource[i].color.w == 1.0;
+            bool isSpot = p3d_LightSource[i].direction.w == 1.0;
+            bool isPoint = (!isDirectional && !isSpot);
+            params.lPos = p3d_LightSource[i].position;
+            params.lDir = normalize(p3d_LightSource[i].direction);
+            params.lAtten = vec4(p3d_LightSource[i].attenuation, 0.0);
+            params.lSpotParams = p3d_LightSource[i].spotParams;
+            #if HAS_SHADOWED_LIGHT
+                bool hasShadows = int(p3d_LightSource[i].hasShadows) == 1;
             #endif
+
+            if (isDirectional)
             {
                 GetDirectionalLight(params
                                     #ifdef HAS_SHADOW_SUNLIGHT
@@ -407,11 +406,7 @@ void main()
                                     #endif // HAS_SHADOW_SUNLIGHT
                 );
             }
-            #ifdef BSP_LIGHTING
-                else if (lightType == LIGHTTYPE_POINT)
-            #else
-                else if (isPoint)
-            #endif
+            else if (isPoint)
             {
                 GetPointLight(params
                 #ifdef HAS_SHADOWED_POINT_LIGHT
@@ -419,11 +414,7 @@ void main()
                 #endif
                 );
             }
-            #ifdef BSP_LIGHTING
-                else if (lightType == LIGHTTYPE_SPOT)
-            #else
-                else if (isSpot)
-            #endif
+            else if (isSpot)
             {
 
                 #ifdef HAS_SHADOWED_SPOTLIGHT
@@ -466,6 +457,13 @@ void main()
 
     // Modulate with albedo
     ambientDiffuse.rgb *= albedo.rgb;
+    #ifdef HAS_LIGHTMAP
+        // Modulate by lightmap.
+        ambientDiffuse.rgb *= textureBicubic(lightmapSampler, l_texcoordLightmap).rgb;
+    #endif
+    #ifdef STATIC_PROP_LIGHTING
+        ambientDiffuse.rgb *= l_staticVertexLighting;
+    #endif
     ambientDiffuse.rgb *= ao;
 
     #if defined(FLAT_LIGHTMAP)
@@ -483,9 +481,6 @@ void main()
                 vec3 spec = SampleCubeMapLod(l_worldEyeToVert.xyz,
                                             finalWorldNormal,
                                             envmapSampler, perceptualRoughness).rgb;
-                #ifdef AMBIENT_LIGHT
-                    spec *= length(p3d_LightModel.ambient.rgb);
-                #endif
             #elif defined(PLANAR_REFLECTION)
                 vec2 reflCoords = l_texcoordReflection.xy / l_texcoordReflection.w;
                 vec3 spec = texture(reflectionSampler, reflCoords).rgb;
@@ -493,10 +488,11 @@ void main()
 
             // TODO: use a BRDF lookup texture in SHADERQUALITY_MEDIUM
             #if SHADER_QUALITY > SHADERQUALITY_LOW
-                vec2 specularBRDF = texture(brdfLut, vec2(NdotV, perceptualRoughness)).xy;
+                //vec2 specularBRDF = texture(brdfLut, vec2(NdotV, perceptualRoughness)).xy;
                 //vec3 brdf = EnvironmentBRDF(armeParams.y*armeParams.y, NdotV, F);
                 //vec3 iblspec = (specularColor * brdf.x + brdf.y) * spec;
-                vec3 iblspec = (specularColor * specularBRDF.x + specularBRDF.y) * spec;
+                //vec3 iblspec = (specularColor * specularBRDF.x + specularBRDF.y) * spec;
+                vec3 iblspec = spec * envBRDFApprox(specularColor, perceptualRoughness, NdotV);
             #else
                 vec3 iblspec = spec * F * specularColor;
             #endif
@@ -507,9 +503,6 @@ void main()
 
     vec3 totalAmbient = ambientDiffuse + specularLighting;
     vec3 totalLight = totalAmbient + totalRadiance;
-    #ifdef STATIC_PROP_LIGHTING
-        totalLight *= l_staticVertexLighting;
-    #endif
     vec3 color = totalLight;
 
     #ifdef SELFILLUM

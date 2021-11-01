@@ -110,38 +110,35 @@ LightingParams_t newLightingParams_t(vec4 eyePos, vec3 eyeVec, vec3 eyeNormal, f
     return params;
 }
 
-void ComputeLightHAndDots(inout LightingParams_t params)
+vec3 DiffuseTerm(inout LightingParams_t params)
 {
-    #if SHADER_QUALITY > SHADERQUALITY_LOW
-        params.H = normalize(params.L + params.V);
-    #endif
-
     float NdotL = dot(params.N, params.L);
     #ifdef HALFLAMBERT
         float HL_NdotL = clamp(NdotL * 0.5 + 0.5, 0.001, 1.0);
         #ifndef LIGHTWARP
             HL_NdotL *= HL_NdotL;
         #endif
-        #ifdef TRANSMISSIVEMASK
-            NdotL = mix(NdotL, HL_NdotL, texture(transmissiveSampler, l_texcoord.xy).r);
-        #else
-            NdotL = HL_NdotL;
-        #endif
+        NdotL = HL_NdotL;
     #else // HALFLAMBERT
-        NdotL = clamp(NdotL, 0.001, 1.0);
+        NdotL = max(0.0, NdotL);
     #endif // HALFLAMBERT
+
+    vec3 diff = vec3(NdotL);
     #ifdef LIGHTWARP
         vec4 lwSample = texture(lightwarpSampler, vec2(NdotL, 0.5));
-        #ifdef LIGHTWARP_IS_LUMINANCE
-            // If the lightwarp was grayscale, it won't automatically convert from gamma to linear,
-            // so do that here. This is so annoying.
-            lwSample.rgb = pow(lwSample.rgb, vec3(2.2));
-        #endif
-        params.NdotL = lwSample.rgb * 2.0;
-    #else // LIGHTWARP
-        params.NdotL = vec3(NdotL);
-    #endif // LIGHTWARP
+        diff = lwSample.rgb * 2.0;
+    #endif
 
+    return diff;
+}
+
+void ComputeLightHAndDots(inout LightingParams_t params)
+{
+    #if SHADER_QUALITY > SHADERQUALITY_LOW
+        params.H = normalize(params.L + params.V);
+    #endif
+
+    params.NdotL = vec3(max(0.0, dot(params.N, params.L)));
 
     #if SHADER_QUALITY == SHADERQUALITY_HIGH
         params.NdotH = clamp(dot(params.N, params.H), 0.0, 1.0);
@@ -174,9 +171,9 @@ float RoughnessToPhongExponent(float roughness)
 
 void AddTotalRadiance(inout LightingParams_t params)
 {
-    vec3 lightRadiance = params.lColor.rgb * params.attenuation;
 
     #if SHADER_QUALITY == SHADERQUALITY_HIGH
+        vec3 lightRadiance = params.lColor.rgb * params.attenuation;
         // Full PBR light contribution with cook-torrance specular
         vec3 G = GeometricOcclusionTerm(params.roughness, params.NdotL, params.NdotV);
         float D = MicrofacetDistributionTerm(params.roughness, params.NdotH);
@@ -184,9 +181,9 @@ void AddTotalRadiance(inout LightingParams_t params)
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
         kD *= 1.0 - params.metallic;
-        vec3 diffuse = kD * params.albedo / PI;
-        vec3 specular = CookTorrance(F, G, D, params.NdotL, params.NdotV) * params.specularScale;
-        params.totalRadiance += (diffuse + specular) * lightRadiance * params.NdotL;
+        vec3 diffuse = kD * params.albedo * DiffuseTerm(params);
+        vec3 specular = CookTorrance(F, G, D, params.NdotL, params.NdotV) * params.specularScale * params.NdotL;
+        params.totalRadiance += (diffuse + specular) * lightRadiance;
 
     #elif SHADER_QUALITY == SHADERQUALITY_MEDIUM
         // PBR light contribution with empirical phong specular
@@ -218,10 +215,8 @@ void GetPointLight(inout LightingParams_t params
 {
     ComputeLightVectors(params);
 
-    // x is a falloff
-    params.attenuation = 1.0 / (params.lAtten.x * (params.distance * params.distance));
-    // Inner/outer radius : y is inner distance, z is outer distance
-    params.attenuation *= clamp((params.lAtten.z - params.distance) / (params.lAtten.z - params.lAtten.y), 0, 1);
+    // Constant, linear, quadratic attenuation formula.
+    params.attenuation = 1.0 / (params.lAtten.x + params.lAtten.y * params.distance + params.lAtten.z * (params.distance * params.distance));
 
     AddTotalRadiance(params);
 }
@@ -234,8 +229,7 @@ void GetSpotlight(inout LightingParams_t params
 {
     ComputeLightVectors(params);
 
-    float distanceAtten = 1.0 / (params.lAtten.x * (params.distance * params.distance));
-    distanceAtten *= clamp((params.lAtten.z - params.distance) / (params.lAtten.z - params.lAtten.y), 0, 1);
+    float distanceAtten = 1.0 / (params.lAtten.x + params.lAtten.y * params.distance + params.lAtten.z * (params.distance * params.distance));
 
     // Spot attenuation
     float cosTheta = clamp(dot(params.L, normalize(-params.lDir.xyz)), 0, 1);

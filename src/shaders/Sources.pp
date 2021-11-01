@@ -32,6 +32,7 @@
     lm_dilate.compute.glsl \
     skybox.frag.glsl \
     skybox.vert.glsl \
+    source_vlg.vert.glsl source_vlg.frag.glsl source_vlg_orig.frag.glsl \
     spriteParticle.vert.glsl spriteParticle.geom.glsl spriteParticle.frag.glsl \
     unlitNoMat.frag.glsl \
     unlitNoMat.vert.glsl \
