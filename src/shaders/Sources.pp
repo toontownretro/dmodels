@@ -16,6 +16,7 @@
     csmdepth.frag.glsl \
     csmdepth.geom.glsl \
     csmdepth.vert.glsl \
+    cubemap_filter.compute.glsl \
     debug_csm.frag.glsl \
     debug_csm.vert.glsl \
     depth.frag.glsl \
