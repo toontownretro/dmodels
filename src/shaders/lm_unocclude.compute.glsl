@@ -34,7 +34,6 @@ uniform vec3 u_to_cell_size;
 
 uint
 trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
-#if 1
   vec3 rel = p_to - p_from;
   float rel_len = length(rel);
   vec3 dir = normalize(rel);
@@ -47,7 +46,7 @@ trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
   ivec3 icell = ivec3(from_cell);
   ivec3 iendcell = ivec3(to_cell);
   vec3 dir_cell = normalize(rel_cell);
-  vec3 delta = abs(1.0 / dir_cell);
+  vec3 delta = min(abs(1.0 / dir_cell), u_grid_size);
   ivec3 step = ivec3(sign(rel_cell));
   vec3 side = (sign(rel_cell) * (vec3(icell) - from_cell) + (sign(rel_cell) * 0.5) + 0.5) * delta;
 
@@ -123,62 +122,6 @@ trace_ray(vec3 p_from, vec3 p_to, out float r_distance, out vec3 r_normal) {
 
     iters++;
   }
-#else
-  vec3 rel = p_to - p_from;
-  float rel_len = length(rel);
-  vec3 dir = normalize(rel);
-  vec3 inv_dir = 1.0 / dir;
-
-  uint num_tris = get_num_lightmap_tris();
-  uint hit = RAY_MISS;
-  float best_distance = 1e20;
-  LightmapTri tri;
-  LightmapVertex vert0, vert1, vert2;
-  for (uint tidx = 0; tidx < num_tris; tidx++) {
-    // Ray-box test
-    get_lightmap_tri(tidx, tri);
-    vec3 t0 = (tri.mins - p_from) * inv_dir;
-    vec3 t1 = (tri.maxs - p_from) * inv_dir;
-    vec3 tmin = min(t0, t1), tmax = max(t0, t1);
-
-    if (max(tmin.x, max(tmin.y, tmin.z)) > min(tmax.x, min(tmax.y, tmax.z))) {
-      // Ray-box failed.
-      continue;
-    }
-
-    // Prepare triangle vertices.
-    get_lightmap_vertex(tri.indices.x, vert0);
-    get_lightmap_vertex(tri.indices.y, vert1);
-    get_lightmap_vertex(tri.indices.z, vert2);
-
-    vec3 vtx0 = vert0.position;
-    vec3 vtx1 = vert1.position;
-    vec3 vtx2 = vert2.position;
-
-    vec3 normal = normalize(cross(vtx1 - vtx0, vtx2 - vtx0));
-    bool backface = dot(normal, dir) >= 0.0;
-
-    float dist;
-    vec3 barycentric;
-
-    if (ray_hits_triangle(p_from, dir, rel_len, u_bias, vtx0, vtx1, vtx2, dist, barycentric)) {
-      if (!backface) {
-        dist = max(u_bias, dist - u_bias);
-      }
-
-      if (dist < best_distance) {
-        hit = backface ? RAY_BACK : RAY_FRONT;
-        best_distance = dist;
-        r_distance = dist;
-        r_normal = normal;
-      }
-    }
-  }
-
-  if (hit != RAY_MISS) {
-    return hit;
-  }
-#endif
 
   return RAY_MISS;
 }

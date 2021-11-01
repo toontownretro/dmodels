@@ -8,42 +8,34 @@
  * license.  You should have received a copy of this license along
  * with this source code in a file named "LICENSE."
  *
- * @file lm_indirect.compute.glsl
+ * @file lm_direct.compute.glsl
  * @author lachbr
- * @date 2021-09-26
+ * @date 2021-09-23
  */
 
-// Compute shader for gathering indirect lighting for a luxel.
+// Shader for computing ambient light probes.
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-// Luxel reflectivity.  Direct light * albedo + emission.
-// Computed in the direct pass.
-uniform sampler2DArray luxel_reflectivity;
+// Probe positions.
+uniform samplerBuffer probes;
+// Output probe data.
+layout(rgba32f) uniform imageBuffer probe_output;
+layout(rgba32f) uniform imageBuffer probe_output_flat;
 
+uniform sampler2DArray luxel_light;
 uniform sampler2DArray luxel_albedo;
-uniform sampler2DArray luxel_normal;
-uniform sampler2DArray luxel_position;
 
-// Output: indirect lighting at a luxel.
-layout(rgba32f) uniform writeonly image2DArray luxel_indirect;
-// We accumulate bounce passes here.
-layout(rgba32f) uniform image2DArray luxel_indirect_accum;
+uniform ivec2 u_grid_size_probe_count;
+#define u_grid_size (u_grid_size_probe_count.x)
+#define u_probe_count (u_grid_size_probe_count.y)
 
-layout(rgba32f) uniform image2DArray luxel_light;
-
-uniform ivec4 u_palette_size_page_bounce;
-#define u_palette_size (u_palette_size_page_bounce.xy)
-#define u_palette_page (u_palette_size_page_bounce.z)
-#define u_bounce (u_palette_size_page_bounce.w)
-uniform ivec3 u_region_ofs_grid_size;
-#define u_region_ofs (u_region_ofs_grid_size.xy)
-#define u_grid_size (u_region_ofs_grid_size.z)
 uniform vec2 u_bias_;
 #define u_bias (u_bias_.x)
+
 uniform vec3 u_to_cell_offset;
 uniform vec3 u_to_cell_size;
 
@@ -146,108 +138,97 @@ trace_ray(vec3 p_from, vec3 p_to, out uint r_triangle, out vec3 r_barycentric) {
 
     iters++;
   }
-
   return RAY_MISS;
 }
 
 void
 main() {
-  ivec2 palette_pos = ivec2(gl_GlobalInvocationID.xy) + u_region_ofs;
-  if (any(greaterThanEqual(palette_pos, u_palette_size))) {
-    // Too large, do nothing.
+  int probe_index = int(gl_GlobalInvocationID.x);
+  if (probe_index >= u_probe_count) {
     return;
   }
 
-  //memoryBarrier();
+  vec3 position = texelFetch(probes, probe_index).xyz;
 
-  ivec3 palette_coord = ivec3(palette_pos, u_palette_page);
+  vec4 probe_sh_accum[9] = vec4[](
+    vec4(0.0),
+    vec4(0.0),
+    vec4(0.0),
+    vec4(0.0),
+    vec4(0.0),
+    vec4(0.0),
+    vec4(0.0),
+    vec4(0.0),
+    vec4(0.0)
+  );
 
-  vec3 normal = texelFetch(luxel_normal, palette_coord, 0).xyz;
-  if (length(normal) < 0.5) {
-    return;
-  }
-  normal = normalize(normal);
+  vec4 probe_flat_accum = vec4(1.0);
 
-  vec3 position = texelFetch(luxel_position, palette_coord, 0).xyz;
-
-  vec3 x;
-  bool is_z = false;
-  if (abs(normal.x) >= abs(normal.y) && abs(normal.x) >= abs(normal.z)) {
-
-  } else if (abs(normal.y) >= abs(normal.z)) {
-
-  } else {
-    is_z = true;
-  }
-
-  vec3 v0 = is_z ? vec3(1, 0, 0) : vec3(0, 0, 1);
-  vec3 tangent = normalize(cross(v0, normal));
-  vec3 bitangent = normalize(cross(tangent, normal));
-  mat3 normal_mat = mat3(tangent, bitangent, normal);
-
-  vec3 light_average = vec3(0);
-  float active_rays = 0.0;
   for (uint i = u_ray_from; i < u_ray_to; i++) {
-    vec3 ray_dir = normal_mat * vogel_hemisphere(i, u_ray_count, quick_hash(vec2(palette_pos)));
+    vec3 ray_dir = vogel_hemisphere(i, u_ray_count, quick_hash(vec2(float(probe_index), 0.0)));
+    if (bool(i & 1)) {
+      // Throw to both sides, so alternate them.
+      ray_dir.z *= -1.0;
+    }
 
     uint tidx;
     vec3 barycentric;
+    vec3 light = vec3(0.0);
 
-    vec3 light = vec3(0);
-    uint trace_result = trace_ray(position + ray_dir * u_bias,
-                                  position + ray_dir * 9999999,
-                                  tidx, barycentric);
-
+    uint trace_result = trace_ray(position + ray_dir * u_bias, position + ray_dir * 9999999, tidx, barycentric);
     if (trace_result == RAY_FRONT) {
-      // Hit a triangle.
       LightmapTri tri = get_lightmap_tri(tidx);
       vec2 uv0 = get_lightmap_vertex(tri.indices.x).uv;
       vec2 uv1 = get_lightmap_vertex(tri.indices.y).uv;
       vec2 uv2 = get_lightmap_vertex(tri.indices.z).uv;
       vec3 uvw = vec3(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2, float(tri.page));
 
-      // Get reflectivity at the luxel we hit.
-      light = textureLod(luxel_reflectivity, uvw, 0.0).rgb;
-      active_rays += 1.0;
+      light = textureLod(luxel_light, uvw, 0.0).rgb;
 
     } else if (trace_result == RAY_MISS) {
-      // If we hit nothing, we actually hit the sky.  Bring in sky color,
-      // but only on the first bonuce.
-      if (u_bounce == 0) {
-        light = u_sky_color;
-      }
-      active_rays += 1.0;
+      light = u_sky_color;
     }
 
-    light_average += light;
+    {
+      float c[9] = float[](
+        0.282095, //l0
+        0.488603 * ray_dir.y, //l1n1
+        0.488603 * ray_dir.z, //l1n0
+        0.488603 * ray_dir.x, //l1p1
+        1.092548 * ray_dir.x * ray_dir.y, //l2n2
+        1.092548 * ray_dir.y * ray_dir.z, //l2n1
+        //0.315392 * (ray_dir.x * ray_dir.x + ray_dir.y * ray_dir.y + 2.0 * ray_dir.z * ray_dir.z), //l20
+        0.315392 * (3.0 * ray_dir.z * ray_dir.z - 1.0), //l20
+        1.092548 * ray_dir.x * ray_dir.z, //l2p1
+        0.546274 * (ray_dir.x * ray_dir.x - ray_dir.y * ray_dir.y) //l2p2
+      );
+
+      for (uint j = 0; j < 9; j++) {
+        probe_sh_accum[j].rgb += light * c[j];
+      }
+    }
+
+    {
+      probe_flat_accum.rgb += light;
+    }
   }
 
-  vec3 light_total;
-  if (u_ray_from == 0) {
-    light_total = vec3(0.0);
-
-  }else {
-    vec4 accum = imageLoad(luxel_indirect_accum, palette_coord);
-    light_total = accum.rgb;
-    active_rays += accum.a;
+  if (u_ray_from > 0) {
+    for (uint j = 0; j < 9; j++) {
+      probe_sh_accum[j] += imageLoad(probe_output, int(probe_index * 9 + j));
+    }
+    probe_flat_accum += imageLoad(probe_output_flat, int(probe_index));
   }
-
-  light_total += light_average;
 
   if (u_ray_to == u_ray_count) {
-    if (active_rays > 0) {
-      light_total /= active_rays;
+    for (uint j = 0; j < 9; j++) {
+      probe_sh_accum[j] *= 4.0 / float(u_ray_count);
     }
-
-    // Store final luxel indirect lighting.
-    imageStore(luxel_indirect, palette_coord, vec4(light_total, 1.0));
-
-    vec4 direct = imageLoad(luxel_light, palette_coord);
-    direct.rgb += light_total;
-    imageStore(luxel_light, palette_coord, direct);
-
-  } else {
-    // Keep accumulating.
-    imageStore(luxel_indirect_accum, palette_coord, vec4(light_total, active_rays));
+    probe_flat_accum /= float(u_ray_count);
   }
+
+  for (uint j = 0; j < 9; j++) {
+    imageStore(probe_output, int(probe_index * 9 + j), probe_sh_accum[j]);
+  }
+  imageStore(probe_output_flat, int(probe_index), probe_flat_accum);
 }

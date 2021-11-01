@@ -35,21 +35,14 @@ uniform ivec3 u_palette_size_page;
 uniform ivec3 u_region_ofs_grid_size;
 #define u_region_ofs (u_region_ofs_grid_size.xy)
 #define u_grid_size (u_region_ofs_grid_size.z)
-uniform vec2 u_bias_;
-#define u_bias (u_bias_.x)
+uniform vec2 u_bias_sun_extent;
+#define u_bias (u_bias_sun_extent.x)
+#define u_sun_extent (u_bias_sun_extent.y)
 uniform vec3 u_to_cell_offset;
 uniform vec3 u_to_cell_size;
 
-vec2 rand(vec2 co){
-    return vec2(
-        fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453),
-        fract(cos(dot(co.yx ,vec2(8.64947,45.097))) * 43758.5453)
-    )*2.0-1.0;
-}
-
 uint
 trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
-#if 1
   vec3 rel = p_to - p_from;
   float rel_len = length(rel);
   vec3 dir = normalize(rel);
@@ -62,7 +55,7 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
   ivec3 icell = ivec3(from_cell);
   ivec3 iendcell = ivec3(to_cell);
   vec3 dir_cell = normalize(rel_cell);
-  vec3 delta = abs(1.0 / dir_cell);
+  vec3 delta = min(abs(1.0 / dir_cell), u_grid_size);
   ivec3 step = ivec3(sign(rel_cell));
   vec3 side = (sign(rel_cell) * (vec3(icell) - from_cell) + (sign(rel_cell) * 0.5) + 0.5) * delta;
 
@@ -123,48 +116,15 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
 
     iters++;
   }
-#else
-
-  vec3 rel = p_to - p_from;
-  float rel_len = length(rel);
-  vec3 dir = normalize(rel);
-  vec3 inv_dir = 1.0 / dir;
-
-  uint num_tris = get_num_lightmap_tris();
-  for (uint tidx = 0; tidx < num_tris; tidx++) {
-    // Ray-box test
-    LightmapTri tri = get_lightmap_tri(tidx);
-    vec3 t0 = (tri.mins - p_from) * inv_dir;
-    vec3 t1 = (tri.maxs - p_from) * inv_dir;
-    vec3 tmin = min(t0, t1), tmax = max(t0, t1);
-
-    //if (max(tmin.x, max(tmin.y, tmin.z)) > min(tmax.x, min(tmax.y, tmax.z))) {
-      // Ray-box failed.
-    //  continue;
-    //}
-
-    // Prepare triangle vertices.
-    LightmapVertex vert0 = get_lightmap_vertex(tri.indices.x);
-    LightmapVertex vert1 = get_lightmap_vertex(tri.indices.y);
-    LightmapVertex vert2 = get_lightmap_vertex(tri.indices.z);
-
-    vec3 vtx0 = vert0.position;
-    vec3 vtx1 = vert1.position;
-    vec3 vtx2 = vert2.position;
-
-    float dist;
-    vec3 barycentric;
-
-    if (ray_hits_triangle(p_from, dir, rel_len, u_bias, vtx0, vtx1, vtx2, dist, barycentric)) {
-      o_distance = dist;
-      o_bary = barycentric;
-      return RAY_CROSS; // Any hit good.
-    }
-  }
-#endif
 
   return RAY_MISS;
 }
+
+const int SUN_AREA_LIGHT_SAMPLES = 30;
+// These values are needed to get the same results as VRAD for sun soft
+// shadows.
+const float COORD_EXTENT = 2 * 16384;
+const float MAX_TRACE_LENGTH = 1.732050807569 * COORD_EXTENT;
 
 void
 main() {
@@ -212,7 +172,7 @@ main() {
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
       attenuation = 1.0;
       L = normalize(-light.dir);
-      light_pos = position - light.dir * 9999999;
+      light_pos = position - light.dir * MAX_TRACE_LENGTH;
 
     } else {
       light_pos = light.pos;
@@ -246,41 +206,37 @@ main() {
     float hit_dist;
     vec3 bary;
 
-    /*if (light.light_type == LIGHT_TYPE_POINT || light.light_type == LIGHT_TYPE_SPOT) {
-      // For points and spot lights.  Pick several random points along a quad
-      // oriented in the direction of the light and trace a ray to each point,
-      // averaging the shadow values for all rays.
-      float active_rays = 0.0;
-      bool is_z = false;
-      if (abs(L.x) >= abs(L.y) && abs(L.x) >= abs(L.z)) {
+    vec3 start = position + (L * u_bias);
 
-      } else if (abs(L.y) >= abs(L.z)) {
-
-      } else {
-        is_z = true;
+    /*if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
+      // Special case for sun light to implement soft shadows.
+      int num_samples = 1;
+      if (u_sun_extent > 0.0) {
+        num_samples = SUN_AREA_LIGHT_SAMPLES;
       }
-      vec3 v0 = is_z ? vec3(1, 0, 0) : vec3(0, 0, 1);
-      vec3 tangent = normalize(cross(v0, -L));
-      vec3 binormal = normalize(cross(tangent, -L));
-      for (int j = 0; j < 36; j++) {
-        float x = j / 6;
-        float y = float(j % 6);
-        vec2 ofs = rand(vec2(x, y)) * 8.0;
-        vec3 ray_to = light_pos;
-        ray_to += tangent * ofs.x;
-        ray_to += binormal * ofs.y;
-        if (trace_ray(position + (L * u_bias), ray_to, hit_dist, bary) == RAY_MISS) {
-          active_rays += 1.0;
+
+      float hash = quick_hash(light.dir.xy);
+
+      float fraction_visible = 0.0;
+      for (int d = 0; d < num_samples; d++) {
+        vec3 end = light_pos;
+        if (d > 0) {
+          // Jitter light source location.
+          vec3 ofs = vogel_hemisphere(uint(d), uint(num_samples), hash);
+          ofs *= MAX_TRACE_LENGTH * u_sun_extent;
+          end += ofs;
+        }
+        if (trace_ray(start, end, hit_dist, bary) == RAY_MISS) {
+          fraction_visible += 1.0;
         }
       }
-      attenuation *= (active_rays / 64.0);
-      static_light += attenuation * light.color.rgb;
+      fraction_visible /= num_samples;
 
-    } else*/ if (trace_ray(position + (L * u_bias), light_pos, hit_dist, bary) == RAY_MISS) {
+      static_light += fraction_visible * attenuation * light.color.rgb;
+
+    } else*/ if (trace_ray(start, light_pos, hit_dist, bary) == RAY_MISS) {
       static_light += attenuation * light.color.rgb;
-    } //else {
-      //static_light += hit_dist;
-    //}
+    }
   }
 
   imageStore(luxel_direct, palette_coord, vec4(static_light, 1.0));
