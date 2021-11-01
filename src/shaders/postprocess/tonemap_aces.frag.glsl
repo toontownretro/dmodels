@@ -24,9 +24,19 @@ vec3 rtt_and_odt_fit(vec3 v) {
   return a / b;
 }
 
+vec3 aces(vec3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 void main() {
   o_color = textureLod(sceneTexture, l_texcoord, 0);
-  o_color.rgb = transpose(aces_input_mat) * o_color.rgb;
-  o_color.rgb = rtt_and_odt_fit(o_color.rgb);
-  o_color.rgb = clamp(transpose(aces_output_mat) * o_color.rgb, 0, 1);
+  o_color.rgb = aces(o_color.rgb);
+  //o_color.rgb = transpose(aces_input_mat) * o_color.rgb;
+  //o_color.rgb = rtt_and_odt_fit(o_color.rgb);
+  //o_color.rgb = clamp(transpose(aces_output_mat) * o_color.rgb, 0, 1);
 }
