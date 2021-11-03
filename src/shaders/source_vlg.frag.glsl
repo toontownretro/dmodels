@@ -417,10 +417,10 @@ void main() {
 //  float envMapMask = mix(baseColor.a, specMask, envMapSpecMaskControl)
 //#endif
 
-#if !PHONG
-  // Assume it's a metal.
-  specularity = envmapTint.rgb;
-  roughness = (1.0 - specMask) * 0.25 + 0.25;
+#if !PHONG && MAT_ENVMAP
+  roughness = 1 - pow(specMask * clamp(max(envMapTint.r, max(envMapTint.g, envMapTint.b)), 0, 1), 0.115);
+#else
+  roughness = 1.0;
 #endif
 
   float NdotV = clamp(abs(dot(worldNormal, worldVertToEyeDir)), 0, 1);
