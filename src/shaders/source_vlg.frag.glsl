@@ -300,7 +300,7 @@ void main() {
 
   vec4 baseColor = texture(albedoTexture, l_texcoord);
   float alpha;
-#if (SELFILLUM && !SELFILLUMMASK) || BASEMAPALPHAPHONGMASK || (ENVMAP && !NORMALMAPALPHAENVMAPMASK)
+#if (SELFILLUM && !SELFILLUMMASK) || BASEMAPALPHAPHONGMASK || (ENVMAP && MAT_ENVMAP && !NORMALMAPALPHAENVMAPMASK)
   // Base alpha used for something else, don't interpret it as alpha.
   alpha = l_vertexColor.a;
 #else

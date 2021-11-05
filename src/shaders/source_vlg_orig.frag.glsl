@@ -22,9 +22,9 @@ in vec3 l_worldVertexToEye;
 
 const float PI = 3.14159265359;
 
-#ifdef RIMLIGHT
-#undef RIMLIGHT
-#endif
+//#ifdef RIMLIGHT
+//#undef RIMLIGHT
+//#endif
 
 //#ifdef LIGHTWARP
 //#undef LIGHTWARP
