@@ -43,10 +43,14 @@ in vec4 l_eyePosition;
 
 #endif // LIGHTING
 
-#ifdef AMBIENT_LIGHT
+#if AMBIENT_PROBE
+  uniform vec3 ambientProbe[9];
+
+#elif AMBIENT_LIGHT
     uniform struct {
       vec4 ambient;
     } p3d_LightModel;
+
 #endif // AMBIENT_LIGHT
 
 out vec4 outputColor;
@@ -143,7 +147,9 @@ void main() {
 
   // Transform into world space
   //vec3 corneaWorldNormal = worldTangent * corneaTangentNormal.x;
-  vec3 corneaWorldNormal = worldNormal;//TangentToWorldNormalized(corneaTangentNormal, worldNormal, worldTangent, worldBinormal);
+  vec3 corneaWorldNormal = TangentToWorldNormalized(corneaTangentNormal, worldNormal, worldTangent, worldBinormal);
+  //outputColor = vec4(corneaWorldNormal, 1.0);
+  //return;
 
   // Dilate pupil
   irisUv -= 0.5; // center around (0, 0)
@@ -190,7 +196,24 @@ void main() {
         );
 
     vec3 ambientDiffuse = vec3(0, 0, 0);
-    #if defined(AMBIENT_LIGHT)
+    #if defined(AMBIENT_PROBE)
+        vec3 wnormal = corneaWorldNormal;
+        const float c1 = 0.429043;
+        const float c2 = 0.511664;
+        const float c3 = 0.743125;
+        const float c4 = 0.886227;
+        const float c5 = 0.247708;
+        ambientDiffuse += (c1 * ambientProbe[8] * (wnormal.x * wnormal.x - wnormal.y * wnormal.y) +
+                c3 * ambientProbe[6] * wnormal.z * wnormal.z +
+                c4 * ambientProbe[0] -
+                c5 * ambientProbe[6] +
+                2.0 * c1 * ambientProbe[4] * wnormal.x * wnormal.y +
+                2.0 * c1 * ambientProbe[7] * wnormal.x * wnormal.z +
+                2.0 * c1 * ambientProbe[5] * wnormal.y * wnormal.z +
+                2.0 * c2 * ambientProbe[3] * wnormal.x +
+                2.0 * c2 * ambientProbe[1] * wnormal.y +
+                2.0 * c2 * ambientProbe[2] * wnormal.z);
+    #elif defined(AMBIENT_LIGHT)
         ambientDiffuse += p3d_LightModel.ambient.rgb;
     #endif
 
