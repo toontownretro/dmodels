@@ -173,8 +173,12 @@ vec3 ambientLookup(vec3 wnormal) {
 #elif AMBIENT_LIGHT
   return p3d_LightModel.ambient.rgb;
 
-#else
+#elif NUM_LIGHTS > 0
   return vec3(0.0);
+
+#else
+  return vec3(1.0);
+
 #endif
 }
 
