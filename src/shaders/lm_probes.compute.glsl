@@ -24,7 +24,6 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 uniform samplerBuffer probes;
 // Output probe data.
 layout(rgba32f) uniform imageBuffer probe_output;
-layout(rgba32f) uniform imageBuffer probe_output_flat;
 
 uniform sampler2DArray luxel_light;
 uniform sampler2DArray luxel_albedo;
@@ -162,8 +161,6 @@ main() {
     vec4(0.0)
   );
 
-  vec4 probe_flat_accum = vec4(1.0);
-
   for (uint i = u_ray_from; i < u_ray_to; i++) {
     vec3 ray_dir = vogel_hemisphere(i, u_ray_count, quick_hash(vec2(float(probe_index), 0.0)));
     if (bool(i & 1)) {
@@ -207,28 +204,21 @@ main() {
         probe_sh_accum[j].rgb += light * c[j];
       }
     }
-
-    {
-      probe_flat_accum.rgb += light;
-    }
   }
 
   if (u_ray_from > 0) {
     for (uint j = 0; j < 9; j++) {
       probe_sh_accum[j] += imageLoad(probe_output, int(probe_index * 9 + j));
     }
-    probe_flat_accum += imageLoad(probe_output_flat, int(probe_index));
   }
 
   if (u_ray_to == u_ray_count) {
     for (uint j = 0; j < 9; j++) {
       probe_sh_accum[j] *= 4.0 / float(u_ray_count);
     }
-    probe_flat_accum /= float(u_ray_count);
   }
 
   for (uint j = 0; j < 9; j++) {
     imageStore(probe_output, int(probe_index * 9 + j), probe_sh_accum[j]);
   }
-  imageStore(probe_output_flat, int(probe_index), probe_flat_accum);
 }
