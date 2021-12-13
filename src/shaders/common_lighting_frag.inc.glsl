@@ -21,7 +21,7 @@
 #define LIGHTTYPE_SPOT			3
 
 #ifdef LIGHTWARP
-    uniform sampler2D lightwarpSampler;
+    uniform sampler1D lightwarpSampler;
 #endif
 
 #ifdef TRANSMISSIVEMASK
@@ -125,7 +125,7 @@ vec3 DiffuseTerm(inout LightingParams_t params)
 
     vec3 diff = vec3(NdotL);
     #ifdef LIGHTWARP
-        vec4 lwSample = texture(lightwarpSampler, vec2(NdotL, 0.5));
+        vec4 lwSample = texture(lightwarpSampler, NdotL);
         diff = lwSample.rgb * 2.0;
     #endif
 
