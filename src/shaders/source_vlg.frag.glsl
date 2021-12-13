@@ -20,6 +20,10 @@ in vec3 l_worldBinormal;
 in vec4 l_vertexColor;
 in vec3 l_worldVertexToEye;
 
+//#if FOG
+in vec3 l_eyePosition;
+//#endif
+
 const float PI = 3.14159265359;
 
 //#ifdef RIMLIGHT
@@ -50,7 +54,7 @@ uniform sampler1D lightWarpTexture;
 #endif
 
 #if PHONG
-//#define HALFLAMBERT 1
+#define HALFLAMBERT 1
 // Phong exponent, phong albedo tint, phong boost, exponent factor
 uniform vec3 phongParams;
 #define phongExponent (phongParams.x)
@@ -471,4 +475,8 @@ void main() {
   vec3 result = ambientLighting + lighting;
 
   fragColor = vec4(result, alpha);
+
+#ifdef FOG
+  ApplyFog(fragColor, vec4(l_eyePosition, 1.0));
+#endif
 }

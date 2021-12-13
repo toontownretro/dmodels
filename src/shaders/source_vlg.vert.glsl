@@ -28,6 +28,12 @@ out vec4 l_vertexColor;
 // world-space camera position.
 out vec3 l_worldVertexToEye;
 
+//#if FOG
+// Position of vertex relative to camera.  Needed for fog.
+out vec3 l_eyePosition;
+uniform mat4 p3d_ModelViewMatrix;
+//#endif
+
 void main() {
   // First animate the vertex using the joint transforms.
   vec4 finalVertex = p3d_Vertex;
@@ -55,4 +61,8 @@ void main() {
   vec4 colorScale = p3d_ColorScale;
   colorScale.rgb = pow(colorScale.rgb, vec3(2.2));
   l_vertexColor = vertexColor * colorScale;
+
+//#if FOG
+  l_eyePosition = (p3d_ModelViewMatrix * finalVertex).xyz;
+//#endif
 }

@@ -20,6 +20,8 @@ in vec3 l_worldBinormal;
 in vec4 l_vertexColor;
 in vec3 l_worldVertexToEye;
 
+in vec3 l_eyePosition;
+
 const float PI = 3.14159265359;
 
 //#ifdef RIMLIGHT
@@ -82,7 +84,7 @@ uniform sampler2D selfIllumMaskTexture;
 #if ENVMAP
 uniform samplerCube envMapTexture;
 //uniform sampler2D envMapMaskTexture;
-//uniform vec3 envMapTint;
+uniform vec3 envMapTint;
 //uniform vec2 envMapContrastSaturation;
 #endif
 
@@ -377,7 +379,7 @@ void main() {
 
 #endif // NUM_LIGHTS
 
-//#if ENVMAP
+#if ENVMAP
 //
 //#if SELFILLUMFRESNEL
 //  float envMapMask = mix(baseColor.a, invertPhongMask, envMapSpecMaskControl);
@@ -402,12 +404,13 @@ void main() {
   //lighting += textureLod(envMapTexture, vReflect, int(roughness * 9.0)).rgb *
   //            envBRDFApprox(specularity, roughness, );
 
-  //envMapColor = (mix(1, fresnelRanges, envMapFresnel.x) *
-  //               mix(envMapMask, 1 - envMapMask, invertPhongMask)) *
-  //              texture(envMapTexture, vReflect) *
-  //              envMapTint;
+  vec3 envMapColor = //(mix(1, fresnelRanges, envMapFresnel.x) *
+                     //mix(envMapMask, 1 - envMapMask, invertPhongMask)) *
+                      texture(envMapTexture, vReflect).rgb *
+                      envMapTint;
+  specularLighting += envMapColor;
 
-//#endif // ENVMAP
+#endif // ENVMAP
 
   vec3 diffuseComponent = albedo.rgb * diffuseLighting;
 
@@ -430,4 +433,8 @@ void main() {
   vec3 result = specularLighting * specularTint + diffuseComponent;
 
   fragColor = vec4(result, alpha);
+
+#ifdef FOG
+  ApplyFog(fragColor, vec4(l_eyePosition, 1.0));
+#endif
 }
