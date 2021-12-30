@@ -506,7 +506,7 @@ void main()
     vec3 color = totalLight;
 
     #ifdef SELFILLUM
-        //color += selfillumTint * emission;
+        color += selfillumTint * albedo.rgb * emission;
     #endif
 
     outputColor = vec4(color, albedo.a);
