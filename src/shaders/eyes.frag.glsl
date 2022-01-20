@@ -215,6 +215,9 @@ void main() {
                 2.0 * c2 * ambientProbe[2] * wnormal.z);
     #elif defined(AMBIENT_LIGHT)
         ambientDiffuse += p3d_LightModel.ambient.rgb;
+    #else
+        outputColor = vec4(1, 0, 0, 1);
+        return;
     #endif
 
     // Now factor in local light sources
