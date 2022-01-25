@@ -6,7 +6,7 @@ uniform sampler2D sceneTexture;
 
 out vec4 o_color;
 
-float Tonemap_Uchimura(float x, float P, float a, float m, float l, float c, float b) {
+vec3 Tonemap_Uchimura(vec3 x, float P, float a, float m, float l, float c, float b) {
   // Uchimura 2017, "HDR theory and practice"
   // Math: https://www.desmos.com/calculator/gslcdxvipg
   // Source: https://www.slideshare.net/nikuque/hdr-theory-and-practicce-jp
@@ -18,18 +18,18 @@ float Tonemap_Uchimura(float x, float P, float a, float m, float l, float c, flo
   float C2 = (a * P) / (P - S1);
   float CP = -C2 / P;
 
-  float w0 = 1.0 - smoothstep(0.0, m, x);
-  float w2 = step(m + l0, x);
-  float w1 = 1.0 - w0 - w2;
+  vec3 w0 = vec3(1.0 - smoothstep(0.0, m, x));
+  vec3 w2 = vec3(step(m + l0, x));
+  vec3 w1 = vec3(1.0 - w0 - w2);
 
-  float T = m * pow(x / m, c) + b;
-  float S = P - (P - S1) * exp(CP * (x - S0));
-  float L = m + a * (x - m);
+  vec3 T = vec3(m * pow(x / m, vec3(c)) + b);
+  vec3 S = vec3(P - (P - S1) * exp(CP * (x - S0)));
+  vec3 L = vec3(m + a * (x - m));
 
   return T * w0 + L * w1 + S * w2;
 }
 
-float Tonemap_Uchimura(float x) {
+vec3 Tonemap_Uchimura(vec3 x) {
   const float P = 1.0;  // max display brightness
   const float a = 1.0;  // contrast
   const float m = 0.22; // linear section start
@@ -41,8 +41,5 @@ float Tonemap_Uchimura(float x) {
 
 void main() {
   o_color = textureLod(sceneTexture, l_texcoord, 0);
-  o_color.rgb = clamp(vec3(
-    Tonemap_Uchimura(o_color.r),
-    Tonemap_Uchimura(o_color.g),
-    Tonemap_Uchimura(o_color.b)), 0, 1);
+  o_color.rgb = clamp(Tonemap_Uchimura(o_color.rgb), 0, 1);
 }
