@@ -187,8 +187,9 @@ main() {
 
   vec3 light_average = vec3(0);
   float active_rays = 0.0;
+  uint noise = random_seed(ivec3(u_ray_from, palette_pos));
   for (uint i = u_ray_from; i < u_ray_to; i++) {
-    vec3 ray_dir = normal_mat * vogel_hemisphere(i, u_ray_count, quick_hash(vec2(palette_pos)));
+    vec3 ray_dir = normal_mat * generate_hemisphere_cosine_weighted_direction(noise);
 
     uint tidx;
     vec3 barycentric;

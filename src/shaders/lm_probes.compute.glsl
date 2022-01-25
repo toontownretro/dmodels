@@ -161,8 +161,9 @@ main() {
     vec4(0.0)
   );
 
+  uint noise = random_seed(ivec3(u_ray_from, probe_index, 49502741));
   for (uint i = u_ray_from; i < u_ray_to; i++) {
-    vec3 ray_dir = vogel_hemisphere(i, u_ray_count, quick_hash(vec2(float(probe_index), 0.0)));
+    vec3 ray_dir = generate_hemisphere_uniform_direction(noise);
     if (bool(i & 1)) {
       // Throw to both sides, so alternate them.
       ray_dir.z *= -1.0;
