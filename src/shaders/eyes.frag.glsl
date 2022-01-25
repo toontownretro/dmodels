@@ -196,7 +196,7 @@ void main() {
         );
 
     vec3 ambientDiffuse = vec3(0, 0, 0);
-    #if defined(AMBIENT_PROBE)
+    #if AMBIENT_PROBE
         vec3 wnormal = corneaWorldNormal;
         const float c1 = 0.429043;
         const float c2 = 0.511664;
@@ -213,7 +213,7 @@ void main() {
                 2.0 * c2 * ambientProbe[3] * wnormal.x +
                 2.0 * c2 * ambientProbe[1] * wnormal.y +
                 2.0 * c2 * ambientProbe[2] * wnormal.z);
-    #elif defined(AMBIENT_LIGHT)
+    #elif AMBIENT_LIGHT
         ambientDiffuse += p3d_LightModel.ambient.rgb;
     #else
         outputColor = vec4(1, 0, 0, 1);
