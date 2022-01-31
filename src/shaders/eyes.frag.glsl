@@ -147,9 +147,11 @@ void main() {
 
   // Transform into world space
   //vec3 corneaWorldNormal = worldTangent * corneaTangentNormal.x;
-  vec3 corneaWorldNormal = TangentToWorldNormalized(corneaTangentNormal, worldNormal, worldTangent, worldBinormal);
-  //outputColor = vec4(corneaWorldNormal, 1.0);
+  //vec3 corneaWorldNormal = TangentToWorldNormalized(corneaTangentNormal, worldNormal, worldTangent, worldBinormal);
+  //outputColor = vec4(worldNormal * 0.5 + 0.5, 1.0);
   //return;
+
+  vec3 corneaWorldNormal = worldNormal;
 
   // Dilate pupil
   irisUv -= 0.5; // center around (0, 0)
@@ -213,6 +215,8 @@ void main() {
                 2.0 * c2 * ambientProbe[3] * wnormal.x +
                 2.0 * c2 * ambientProbe[1] * wnormal.y +
                 2.0 * c2 * ambientProbe[2] * wnormal.z);
+        //outputColor = vec4(wnormal * 0.5 + 0.5, 1.0);
+        //return;
     #elif AMBIENT_LIGHT
         ambientDiffuse += p3d_LightModel.ambient.rgb;
     #else
