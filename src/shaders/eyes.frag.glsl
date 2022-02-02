@@ -12,7 +12,6 @@
 #undef HAS_SHADOWED_POINT_LIGHT
 #undef HAS_SHADOWED_SPOTLIGHT
 
-#include "shaders/common_lighting_frag.inc.glsl"
 #include "shaders/common_frag.inc.glsl"
 #include "shaders/common_fog_frag.inc.glsl"
 
@@ -89,6 +88,156 @@ float intersectRaySphere(vec3 cameraPos, vec3 ray, vec3 sphereCenter, float sphe
   float D = B*B - C;
   return (D > 0) ? (-B * sqrt(D)) : 0;
 }
+
+float Fresnel(vec3 vNormal, vec3 vEyeDir)
+{
+    float fresnel = clamp(1 - dot(vNormal, vEyeDir), 0, 1);
+    return fresnel * fresnel;
+}
+
+float Fresnel4(vec3 vNormal, vec3 vEyeDir)
+{
+    float fresnel = clamp(1 - dot(vNormal, vEyeDir), 0, 1);
+    fresnel = fresnel * fresnel;
+    return fresnel * fresnel;
+}
+
+float Fresnel(vec3 normal, vec3 eyeDir, float exponent)
+{
+    float fresnel = clamp(1 - dot(normal, eyeDir), 0, 1);
+    return pow(fresnel, exponent);
+}
+
+float Fresnel(vec3 normal, vec3 eyeDir, vec3 ranges) {
+  float f = clamp(1 - dot(normal, eyeDir), 0, 1);
+  f = f * f - 0.5;
+  return ranges.y + (f >= 0 ? ranges.z : ranges.x) * f;
+}
+
+vec3 ambientLookup(vec3 wnormal) {
+#if AMBIENT_PROBE
+  const float c1 = 0.429043;
+  const float c2 = 0.511664;
+  const float c3 = 0.743125;
+  const float c4 = 0.886227;
+  const float c5 = 0.247708;
+  return (c1 * ambientProbe[8] * (wnormal.x * wnormal.x - wnormal.y * wnormal.y) +
+          c3 * ambientProbe[6] * wnormal.z * wnormal.z +
+          c4 * ambientProbe[0] -
+          c5 * ambientProbe[6] +
+          2.0 * c1 * ambientProbe[4] * wnormal.x * wnormal.y +
+          2.0 * c1 * ambientProbe[7] * wnormal.x * wnormal.z +
+          2.0 * c1 * ambientProbe[5] * wnormal.y * wnormal.z +
+          2.0 * c2 * ambientProbe[3] * wnormal.x +
+          2.0 * c2 * ambientProbe[1] * wnormal.y +
+          2.0 * c2 * ambientProbe[2] * wnormal.z);
+
+#elif AMBIENT_LIGHT
+  return p3d_LightModel.ambient.rgb;
+
+#elif defined(NUM_LIGHTS) && NUM_LIGHTS > 0
+  return vec3(0.0);
+
+#else
+  return vec3(1.0);
+#endif
+}
+
+#if NUM_LIGHTS > 0
+
+vec3 diffuseTerm(vec3 L, vec3 normal) {
+  float result;
+  float NdotL = dot(normal, L);
+  #ifdef HALFLAMBERT
+    result = clamp(NdotL * 0.5 + 0.5, 0, 1);
+    #ifndef LIGHTWARP
+      result *= result;
+    #endif
+  #else
+    result = clamp(NdotL, 0, 1);
+  #endif
+
+  vec3 diff = vec3(result);
+  #ifdef LIGHTWARP
+    diff = 2.0 * texture(lightWarpTexture, result).rgb;
+  #endif
+
+  return diff;
+}
+
+void specularAndRimTerms(inout vec3 specularLighting,
+                         vec3 lightDir, vec3 eyeDir, vec3 worldNormal, float specularExponent,
+                         vec3 color) {
+  specularExponent *= 4.0;
+
+  // Blinn-Phong specular.  Half-angle instead of reflection vector.
+  vec3 halfDir = normalize(lightDir + eyeDir);
+  float NdotH = clamp(dot(worldNormal, halfDir), 0, 1);
+  specularLighting = vec3(pow(NdotH, specularExponent));
+
+  float NdotL = max(0.0, dot(worldNormal, lightDir));
+
+  specularLighting *= NdotL;
+  specularLighting *= color;
+}
+
+// Accumulates lighting for the given light index.
+void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting,
+             vec3 worldNormal, vec3 worldPos, vec3 eyeDir, float specularExponent) {
+
+  bool isDirectional = p3d_LightSource[i].color.w == 1.0;
+  bool isSpot = p3d_LightSource[i].direction.w == 1.0;
+  bool isPoint = (!isDirectional && !isSpot);
+
+  vec3 lightColor = p3d_LightSource[i].color.rgb;
+  vec3 lightPos = p3d_LightSource[i].position.xyz;
+  vec3 lightDir = normalize(p3d_LightSource[i].direction.xyz);
+  vec3 attenParams = p3d_LightSource[i].attenuation;
+  vec4 spotParams = p3d_LightSource[i].spotParams;
+  float lightDist = 0.0;
+  float lightAtten = 1.0;
+
+  vec3 L;
+  if (isDirectional) {
+    L = lightDir;
+
+  } else {
+    L = lightPos - worldPos;
+    lightDist = length(L);
+    L = L / lightDist;
+
+    lightAtten = 1.0 / (attenParams.x + attenParams.y * lightDist + attenParams.z * (lightDist * lightDist));
+
+    if (isSpot) {
+      // Spotlight cone attenuation.
+      float cosTheta = clamp(dot(L, -lightDir), 0, 1);
+      float spotAtten = (cosTheta - spotParams.z) * spotParams.w;
+      spotAtten = max(0.0001, spotAtten);
+      spotAtten = pow(spotAtten, spotParams.x);
+      spotAtten = clamp(spotAtten, 0, 1);
+      lightAtten *= spotAtten;
+    }
+  }
+
+  diffuseLighting += lightColor * lightAtten * diffuseTerm(L, worldNormal);
+
+  vec3 localSpecular = vec3(0.0);
+  specularAndRimTerms(specularLighting, L, eyeDir, worldNormal, specularExponent,
+                      lightColor * lightAtten);
+  specularLighting += localSpecular;
+}
+
+void doLighting(inout vec3 diffuseLighting, inout vec3 specularLighting,
+                vec3 worldNormal, vec3 worldPos, vec3 eyeDir, float specularExponent,
+                int numLights) {
+  // Start diffuse at ambient color.
+  for (int i = 0; i < numLights; i++) {
+    doLight(i, diffuseLighting, specularLighting, worldNormal, worldPos,
+            eyeDir, specularExponent);
+  }
+}
+
+#endif // NUM_LIGHTS
 
 void main() {
   vec3 worldNormal = normalize(l_worldNormal.xyz);
@@ -176,101 +325,15 @@ void main() {
   vec3 irisTangentNormal = corneaTangentNormal;
   irisTangentNormal.xy *= -2.5;
 
-  // !!!!!!!!!!!!!!!!!!!!!PBR Cornea lighting!!!!!!!!!!!!!!!!!!!!!!
-  float NdotV = max(0.0, dot(corneaWorldNormal.xyz, normalize(worldViewVector.xyz)));
-  float perceptualRoughness = clamp(pow(1 - glossiness, 3.5), 0, 1);
-  float roughness = perceptualRoughness * perceptualRoughness;
-  float metalness = 0.0;
-  vec3 specularColor = mix(vec3(0.04), irisColor.rgb, metalness);
-  #ifdef LIGHTING
+  vec3 totalRadiance = vec3(0);
+  vec3 totalSpecular = vec3(0);
+  vec3 ambientDiffuse = ambientLookup(corneaWorldNormal);
 
-    // Initialize our lighting parameters
-    LightingParams_t params = newLightingParams_t(
-        vec4(worldPosition.xyz, 1),
-        normalize(worldViewVector.xyz),
-        normalize(corneaWorldNormal.xyz),
-        NdotV,
-        roughness,
-        metalness,
-        specularColor,
-        1.0,
-        irisColor.rgb
-        );
-
-    vec3 ambientDiffuse = vec3(0, 0, 0);
-    #if AMBIENT_PROBE
-        vec3 wnormal = corneaWorldNormal;
-        const float c1 = 0.429043;
-        const float c2 = 0.511664;
-        const float c3 = 0.743125;
-        const float c4 = 0.886227;
-        const float c5 = 0.247708;
-        ambientDiffuse += (c1 * ambientProbe[8] * (wnormal.x * wnormal.x - wnormal.y * wnormal.y) +
-                c3 * ambientProbe[6] * wnormal.z * wnormal.z +
-                c4 * ambientProbe[0] -
-                c5 * ambientProbe[6] +
-                2.0 * c1 * ambientProbe[4] * wnormal.x * wnormal.y +
-                2.0 * c1 * ambientProbe[7] * wnormal.x * wnormal.z +
-                2.0 * c1 * ambientProbe[5] * wnormal.y * wnormal.z +
-                2.0 * c2 * ambientProbe[3] * wnormal.x +
-                2.0 * c2 * ambientProbe[1] * wnormal.y +
-                2.0 * c2 * ambientProbe[2] * wnormal.z);
-        //outputColor = vec4(wnormal * 0.5 + 0.5, 1.0);
-        //return;
-    #elif AMBIENT_LIGHT
-        ambientDiffuse += p3d_LightModel.ambient.rgb;
-    #else
-        outputColor = vec4(1, 0, 0, 1);
-        return;
-    #endif
-
-    // Now factor in local light sources
-    for (int i = 0; i < NUM_LIGHTS; i++)
-    {
-            params.lColor = p3d_LightSource[i].color;
-            bool isDirectional = p3d_LightSource[i].color.w == 1.0;
-            bool isSpot = p3d_LightSource[i].direction.w == 1.0;
-            bool isPoint = (!isDirectional && !isSpot);
-            params.lPos = p3d_LightSource[i].position;
-            params.lDir = normalize(p3d_LightSource[i].direction);
-            params.lAtten = vec4(p3d_LightSource[i].attenuation, 0.0);
-            params.lSpotParams = p3d_LightSource[i].spotParams;
-
-        if (isDirectional)
-        {
-            GetDirectionalLight(params
-                                #ifdef HAS_SHADOW_SUNLIGHT
-                                    , p3d_CascadeShadowMap, l_pssmCoords,
-                                    p3d_CascadeMVPs, wspos_view.xyz,
-                                    worldPosition.xyz
-                                #endif // HAS_SHADOW_SUNLIGHT
-            );
-        }
-        else if (isPoint)
-        {
-            GetPointLight(params);
-        }
-        else if (isSpot)
-        {
-
-            GetSpotlight(params);
-        }
-    }
-
-    vec3 totalRadiance = max(vec3(0), params.totalRadiance);
-
-  #else // LIGHTING
-
-      // No direct lighting.  Just give it the ambient if we have it.
-      #ifdef AMBIENT_LIGHT
-          vec3 ambientDiffuse = p3d_LightModel.ambient.rgb;
-      #else
-          // No direct or ambient lighting.  Make it fullbright.
-          vec3 ambientDiffuse = vec3(1.0);
-      #endif
-      vec3 totalRadiance = vec3(0);
-
-  #endif // LIGHTING
+  // Do ligting
+  #if defined(NUM_LIGHTS) && NUM_LIGHTS > 0
+    doLighting(totalRadiance, totalSpecular, corneaWorldNormal, worldPosition,
+               -worldViewVector, 1.0 + 120.0 * glossiness, NUM_LIGHTS);
+  #endif
 
   // Ambient occlusion
   vec3 ambientOcclFromTexture = texture(eyeAmbientOcclSampler, l_texcoord).rgb;
@@ -279,15 +342,10 @@ void main() {
 
   vec3 corneaReflectionVector = reflect(worldViewVector.xyz, corneaWorldNormal.xyz);
   vec3 reflection = texture(eyeReflectionCubemapSampler, corneaReflectionVector.xyz).rgb;
-  #ifdef AMBIENT_LIGHT
-    reflection *= length(p3d_LightModel.ambient.rgb);
-  #endif
-  vec2 specularBRDF = texture(brdfLutSampler, vec2(NdotV, perceptualRoughness)).xy;
-  reflection *= (specularColor * specularBRDF.x + specularBRDF.y);
+  reflection *= length(ambientLookup(corneaWorldNormal));
 
-  ambientDiffuse *= irisColor.rgb;
-
-  irisLighting += totalRadiance + ambientDiffuse;
+  irisLighting += (totalRadiance + ambientDiffuse) * irisColor.rgb;
+  irisLighting += totalSpecular;
   irisLighting += corneaNoise * 0.1;
   irisLighting += reflection.rgb;
   outputColor = vec4(irisLighting, 1);
