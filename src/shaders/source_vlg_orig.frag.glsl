@@ -43,7 +43,9 @@ uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];
 
 uniform sampler2D albedoTexture;
 
+#if BUMPMAP
 uniform sampler2D normalTexture;
+#endif
 
 #if LIGHTWARP
 uniform sampler1D lightWarpTexture;
@@ -213,9 +215,9 @@ void specularAndRimTerms(inout vec3 specularLighting, inout vec3 rimLighting,
   specularLighting *= color;
 
 #if RIMLIGHT
-  rimLighting = vec3(pow(NdotH, rimExponent));
-  rimLighting *= NdotL;
-  rimLighting *= color;
+  //rimLighting = vec3(pow(NdotH, rimExponent));
+  //rimLighting *= NdotL;
+  //rimLighting *= color;
 #endif
 }
 
@@ -266,7 +268,7 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
   specularAndRimTerms(specularLighting, rimLighting, L, eyeDir, worldNormal, specularExponent,
                       lightColor * lightAtten, rimExponent, fresnel);
   specularLighting += localSpecular;
-  rimLighting += localRim;
+  //rimLighting += localRim;
   #endif
 }
 
@@ -295,7 +297,7 @@ void main() {
 
   vec4 baseColor = texture(albedoTexture, l_texcoord);
   float alpha;
-#if (SELFILLUM && !SELFILLUMMASK) || BASEMAPALPHAPHONGMASK
+#if (SELFILLUM && !SELFILLUMMASK) || BASEMAPALPHAPHONGMASK || BASEMAPALPHAENVMAPMASK
   // Base alpha used for something else, don't interpret it as alpha.
   alpha = l_vertexColor.a;
 #else
@@ -318,7 +320,11 @@ void main() {
   vec3 worldVertToEyeDir = normalize(l_worldVertexToEye);
 
   float specMask;
+#if BUMPMAP
   vec4 normalTexel = texture(normalTexture, l_texcoord);
+#else
+  vec4 normalTexel = vec4(0.5, 0.5, 1.0, 1.0);
+#endif
   vec3 tangentSpaceNormal = normalize(2.0 * normalTexel.xyz - 1.0);
 #ifndef BASEMAPALPHAPHONGMASK
   // Alpha is not a phong mask.  It's in the normal alpha.
@@ -372,10 +378,12 @@ void main() {
   doLighting(diffuseLighting, specularLighting, rimLighting, worldNormal,
              l_worldPosition, worldVertToEyeDir, fSpecExp, fRimExp, fFresnelRanges, NUM_LIGHTS);
 
+#if PHONG
 #ifndef PHONGWARP
   specularLighting *= fFresnelRanges;
 #endif
   specularLighting *= specMask * phongBoost;
+#endif
 
 #endif // NUM_LIGHTS
 
@@ -386,6 +394,14 @@ void main() {
 //#else
 //  float envMapMask = mix(baseColor.a, specMask, envMapSpecMaskControl)
 //#endif
+
+#if BASEMAPALPHAENVMAPMASK
+    float envMapMask = baseColor.a;
+#elif NORMALMAPALPHAENVMAPMASK
+    float envMapMask = normalTexel.a;
+#else
+    float envMapMask = specMask;
+#endif
 
 //  float NdotV = abs(dot(worldNormal, worldVertToEyeDir)) + 1e-5;
 
@@ -407,7 +423,7 @@ void main() {
   vec3 envMapColor = //(mix(1, fresnelRanges, envMapFresnel.x) *
                      //mix(envMapMask, 1 - envMapMask, invertPhongMask)) *
                       texture(envMapTexture, vReflect).rgb *
-                      envMapTint;
+                      envMapTint * envMapMask;
   specularLighting += envMapColor;
 
 #endif // ENVMAP
@@ -424,7 +440,7 @@ void main() {
 #endif
 
 #if RIMLIGHT
-  float rimMultiply = fRimMask * fRimFresnel;
+  float rimMultiply = fRimMask * fRimFresnel * 0.3;
   rimLighting *= rimMultiply;
   specularLighting = max(specularLighting, rimLighting);
   specularLighting += (rimAmbientColor * rimLightBoost) * clamp(rimMultiply * worldNormal.z, 0, 1);

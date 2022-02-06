@@ -54,7 +54,7 @@ uniform sampler1D lightWarpTexture;
 #endif
 
 #if PHONG
-#define HALFLAMBERT 1
+//#define HALFLAMBERT 1
 // Phong exponent, phong albedo tint, phong boost, exponent factor
 uniform vec3 phongParams;
 #define phongExponent (phongParams.x)
@@ -207,9 +207,9 @@ vec3 diffuseTerm(vec3 L, vec3 normal) {
 
   // Normalize it for energy conservation.
   // http://blog.stevemcauley.com/2011/12/03/energy-conserving-wrapped-diffuse/
-  //#ifdef HALFLAMBERT
-  //  diff *= 0.5;
-  //#endif
+  #ifdef HALFLAMBERT
+    diff *= 0.5;
+  #endif
 
   return diff;
 }
