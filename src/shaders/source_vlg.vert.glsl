@@ -5,6 +5,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/common_animation_vert.inc.glsl"
+#include "shaders/common_shadows_vert.inc.glsl"
 
 in vec4 p3d_Vertex;
 in vec3 p3d_Normal;
@@ -33,6 +34,19 @@ out vec3 l_worldVertexToEye;
 out vec3 l_eyePosition;
 uniform mat4 p3d_ModelViewMatrix;
 //#endif
+
+#if defined(HAS_SHADOW_SUNLIGHT) && NUM_LIGHTS > 0
+  uniform struct p3d_LightSourceParameters {
+      vec4 color;
+      vec4 position;
+      vec4 direction;
+      vec4 spotParams;
+      vec3 attenuation;
+  } p3d_LightSource[NUM_LIGHTS];
+
+  uniform mat4 p3d_CascadeMVPs[PSSM_SPLITS];
+  out vec4 l_pssmCoords[PSSM_SPLITS];
+#endif
 
 void main() {
   // First animate the vertex using the joint transforms.
@@ -65,4 +79,10 @@ void main() {
 //#if FOG
   l_eyePosition = (p3d_ModelViewMatrix * finalVertex).xyz;
 //#endif
+
+  #ifdef HAS_SHADOW_SUNLIGHT
+    ComputeSunShadowPositions(l_worldNormal.xyz, vec4(l_worldPosition, 1),
+                            p3d_LightSource[PSSM_LIGHT_ID].direction.xyz,
+                            p3d_CascadeMVPs, l_pssmCoords);
+  #endif
 }

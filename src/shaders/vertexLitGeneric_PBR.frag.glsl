@@ -270,6 +270,12 @@ void main()
 
     #ifdef BUMPMAP
         vec3 tangentSpaceNormal = GetTangentSpaceNormal(bumpSampler, l_texcoord.xy);
+        #ifdef SSBUMP
+            // GetTangentSpaceNormal assumes a regular normal map and makes the
+            // vector signed.  We don't want this for SSBump, so make it
+            // unsigned again.
+            tangentSpaceNormal = tangentSpaceNormal * 0.5 + 0.5;
+        #endif
         #if defined(NEED_EYE_NORMAL)
             TangentToEye(finalEyeNormal.xyz, l_tangent.xyz,
                          l_binormal.xyz, tangentSpaceNormal);
@@ -289,7 +295,7 @@ void main()
 
     // AO/Roughness/Metallic/Emissive properties
     float ao = clamp(u_armeParams.x, 0, 1);
-    float perceptualRoughness = u_armeParams.y;
+    float perceptualRoughness = 1.0;//u_armeParams.y;
     float metalness = clamp(u_armeParams.z, 0, 1);
     float emission = clamp(u_armeParams.w, 0, 1);
     #ifdef AO_MAP
@@ -372,6 +378,8 @@ void main()
                                2.0 * c2 * ambientProbe[3] * wnormal.x +
                                2.0 * c2 * ambientProbe[1] * wnormal.y +
                                2.0 * c2 * ambientProbe[2] * wnormal.z);
+        #else
+            ambientDiffuse = vec3(1);
         #endif
 
         // Multiply the ambient level by the exposure scale.  I don't know if
@@ -466,16 +474,16 @@ void main()
     #endif
     ambientDiffuse.rgb *= ao;
 
-    #if defined(FLAT_LIGHTMAP)
-        ambientDiffuse *= lightmapColor;
-    #endif
-
 	vec3 F = Fresnel_Schlick(specularColor, NdotV);
 
     //#ifdef LIGHTING
         #if defined(ENVMAP) || defined(PLANAR_REFLECTION)
 
             //vec3 kD = mix(vec3(1.0) - F, vec3(0.0), armeParams.z);
+
+            #if !defined(ROUGHNESS_MAP) && !defined(GLOSS_MAP)
+                perceptualRoughness = 0.0;
+            #endif
 
             #ifdef ENVMAP
                 vec3 spec = SampleCubeMapLod(l_worldEyeToVert.xyz,

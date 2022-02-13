@@ -11,6 +11,7 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/common_fog_frag.inc.glsl"
 #include "shaders/common_frag.inc.glsl"
+#include "shaders/common_shadows_frag.inc.glsl"
 
 in vec2 l_texcoord;
 in vec3 l_worldPosition;
@@ -100,6 +101,13 @@ uniform struct p3d_LightSourceParameters {
   vec3 attenuation;
 } p3d_LightSource[NUM_LIGHTS];
 
+#ifdef HAS_SHADOW_SUNLIGHT
+  uniform sampler2DArray p3d_CascadeShadowMap;
+  uniform mat4 p3d_CascadeMVPs[PSSM_SPLITS];
+  in vec4 l_pssmCoords[PSSM_SPLITS];
+  uniform vec4 wspos_view;
+#endif
+
 // We may have an L2 spherical harmonics ambient
 // probe...
 #if AMBIENT_PROBE
@@ -172,7 +180,7 @@ vec3 ambientLookup(vec3 wnormal) {
 
 #if NUM_LIGHTS > 0
 
-vec3 diffuseTerm(vec3 L, vec3 normal) {
+vec3 diffuseTerm(vec3 L, vec3 normal, float shadow) {
   float result;
   float NdotL = dot(normal, L);
   #ifdef HALFLAMBERT
@@ -183,6 +191,8 @@ vec3 diffuseTerm(vec3 L, vec3 normal) {
   #else
     result = clamp(NdotL, 0, 1);
   #endif
+
+  result *= shadow;
 
   vec3 diff = vec3(result);
   #ifdef LIGHTWARP
@@ -195,14 +205,14 @@ vec3 diffuseTerm(vec3 L, vec3 normal) {
 void specularAndRimTerms(inout vec3 specularLighting, inout vec3 rimLighting,
                          vec3 lightDir, vec3 eyeDir, vec3 worldNormal, float specularExponent,
                          vec3 color, float rimExponent, float fresnel) {
-  specularExponent *= 4.0;
-  rimExponent *= 4.0;
+  //specularExponent *= 2;
+  //rimExponent *= 2;
 
   // Blinn-Phong specular.  Half-angle instead of reflection vector.
-  vec3 halfDir = normalize(lightDir + eyeDir);
-  float NdotH = clamp(dot(worldNormal, halfDir), 0, 1);
-  //vec3 vReflect = 2 * worldNormal * dot(worldNormal, eyeDir) - eyeDir;
-  //float NdotH = clamp(dot(vReflect, lightDir), 0, 1);
+  //vec3 halfDir = normalize(lightDir + eyeDir);
+  //float NdotH = max(0.0, dot(worldNormal, halfDir));
+  vec3 vReflect = 2 * worldNormal * dot(worldNormal, eyeDir) - eyeDir;
+  float NdotH = clamp(dot(vReflect, lightDir), 0, 1);
   specularLighting = vec3(pow(NdotH, specularExponent));
 
 #if PHONGWARP
@@ -215,9 +225,9 @@ void specularAndRimTerms(inout vec3 specularLighting, inout vec3 rimLighting,
   specularLighting *= color;
 
 #if RIMLIGHT
-  //rimLighting = vec3(pow(NdotH, rimExponent));
-  //rimLighting *= NdotL;
-  //rimLighting *= color;
+  rimLighting = vec3(pow(NdotH, rimExponent));
+  rimLighting *= NdotL;
+  rimLighting *= color;
 #endif
 }
 
@@ -244,8 +254,8 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
 
   } else {
     L = lightPos - worldPos;
-    lightDist = length(L);
-    L = L / lightDist;
+    lightDist = max(0.00001, length(L));
+    L = normalize(L);
 
     lightAtten = 1.0 / (attenParams.x + attenParams.y * lightDist + attenParams.z * (lightDist * lightDist));
 
@@ -260,15 +270,26 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
     }
   }
 
-  diffuseLighting += lightColor * lightAtten * diffuseTerm(L, worldNormal);
+  float shadowFactor = 1.0;
+  #ifdef HAS_SHADOW_SUNLIGHT
+    if (isDirectional) {
+      GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_pssmCoords, vec3(max(0.0, dot(L, worldNormal))), p3d_CascadeMVPs, wspos_view.xyz, worldPos);
+    }
+  #endif
+
+  vec3 NdotL = diffuseTerm(L, worldNormal, shadowFactor);
+  //lightAtten *= shadowFactor;
+
+  diffuseLighting += lightColor * lightAtten * NdotL;
 
   #if PHONG
   vec3 localSpecular = vec3(0.0);
   vec3 localRim = vec3(0.0);
-  specularAndRimTerms(specularLighting, rimLighting, L, eyeDir, worldNormal, specularExponent,
+  lightAtten *= shadowFactor;
+  specularAndRimTerms(localSpecular, localRim, L, eyeDir, worldNormal, specularExponent,
                       lightColor * lightAtten, rimExponent, fresnel);
   specularLighting += localSpecular;
-  //rimLighting += localRim;
+  rimLighting += localRim;
   #endif
 }
 
@@ -445,6 +466,11 @@ void main() {
   specularLighting = max(specularLighting, rimLighting);
   specularLighting += (rimAmbientColor * rimLightBoost) * clamp(rimMultiply * worldNormal.z, 0, 1);
 #endif
+
+  //#if PHONG
+  //fragColor = vec4(specularLighting * specularTint, alpha);
+  //return;
+  //#endif
 
   vec3 result = specularLighting * specularTint + diffuseComponent;
 

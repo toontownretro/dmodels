@@ -11,6 +11,7 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/common_fog_frag.inc.glsl"
 #include "shaders/common_frag.inc.glsl"
+#include "shaders/common_shadows_frag.inc.glsl"
 
 in vec2 l_texcoord;
 in vec3 l_worldPosition;
@@ -103,6 +104,13 @@ uniform struct p3d_LightSourceParameters {
   vec4 spotParams;
   vec3 attenuation;
 } p3d_LightSource[NUM_LIGHTS];
+
+#ifdef HAS_SHADOW_SUNLIGHT
+  uniform sampler2DArray p3d_CascadeShadowMap;
+  uniform mat4 p3d_CascadeMVPs[PSSM_SPLITS];
+  in vec4 l_pssmCoords[PSSM_SPLITS];
+  uniform vec4 wspos_view;
+#endif
 
 // We may have an L2 spherical harmonics ambient
 // probe...
@@ -234,6 +242,12 @@ void doLight(int i, inout vec3 lighting,
   vec3 L;
   if (isDirectional) {
     L = lightDir;
+
+    #ifdef HAS_SHADOW_SUNLIGHT
+      float lshad = 0.0;
+      GetSunShadow(lshad, p3d_CascadeShadowMap, l_pssmCoords, max(0.0, dot(worldNormal, L)), wspos_view.xyz, worldPos);
+      lightAtten *= lshad;
+    #endif
 
   } else {
     L = lightPos - worldPos;
