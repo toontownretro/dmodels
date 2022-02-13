@@ -410,10 +410,10 @@ void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCo
 	// will cause brush faces facing away from the fake shadows
 	// to be dark.
 	//#if !defined(BUMPED_LIGHTMAP) && !defined(FLAT_LIGHTMAP)
-		if (max3(NdotL) < 0.0)
-		{
-			return;
-		}
+		//if (max3(NdotL) < 0.0)
+	///	//{
+		//	return;
+		//}
 	//#endif
 
 	vec3 proj = vec3(0);

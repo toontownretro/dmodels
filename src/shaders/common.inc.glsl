@@ -186,7 +186,7 @@ vec3 WorldToTangentNormalized(vec3 worldVector, vec3 worldNormal, vec3 worldTang
 vec3 TangentToWorld(vec3 tangentVector, vec3 worldNormal, vec3 worldTangent, vec3 worldBinormal) {
   vec3 worldVector = vec3(0);
   worldVector.xyz = tangentVector.x * worldTangent.xyz;
-  worldVector.xyz += tangentVector.y * worldBinormal.xyz;
+  worldVector.xyz += tangentVector.y * -worldBinormal.xyz;
   worldVector.xyz += tangentVector.z * worldNormal.xyz;
   return worldVector;
 }
