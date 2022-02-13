@@ -26,6 +26,7 @@ uniform samplerBuffer probes;
 layout(rgba32f) uniform imageBuffer probe_output;
 
 uniform sampler2DArray luxel_light;
+uniform sampler2DArray luxel_light_dynamic;
 uniform sampler2DArray luxel_albedo;
 
 uniform ivec2 u_grid_size_probe_count;
@@ -182,6 +183,7 @@ main() {
       vec3 uvw = vec3(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2, float(tri.page));
 
       light = textureLod(luxel_light, uvw, 0.0).rgb;
+      light += textureLod(luxel_light_dynamic, uvw, 0.0).rgb;
 
     } else if (trace_result == RAY_MISS) {
       light = u_sky_color;

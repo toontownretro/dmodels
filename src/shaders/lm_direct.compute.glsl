@@ -23,6 +23,7 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f) uniform writeonly image2DArray luxel_direct;
+layout(rgba32f) uniform writeonly image2DArray luxel_direct_dynamic;
 layout(rgba32f) uniform writeonly image2DArray luxel_reflectivity;
 uniform sampler2DArray luxel_albedo;
 uniform sampler2DArray luxel_position;
@@ -235,12 +236,24 @@ main() {
       static_light += fraction_visible * attenuation * light.color.rgb;
 
     } else*/ if (trace_ray(start, light_pos, hit_dist, bary) == RAY_MISS) {
-      static_light += attenuation * light.color.rgb;
+      if (light.bake_direct == 1) {
+        static_light += attenuation * light.color.rgb;
+
+      } else {
+        dynamic_light += attenuation * light.color.rgb;
+      }
     }
   }
 
-  imageStore(luxel_direct, palette_coord, vec4(static_light, 1.0));
+  // Store dynamic-only light in the dynamic direct texture.
+  dynamic_light *= albedo;
+  dynamic_light += emission;
+  imageStore(luxel_direct_dynamic, palette_coord, vec4(dynamic_light, 1.0));
 
-  vec3 reflectivity = static_light * albedo + emission;
-  imageStore(luxel_reflectivity, palette_coord, vec4(reflectivity, 1.0));
+  // Store dynamic+static light in the reflectivity texture for bouncing light.
+  dynamic_light += static_light * albedo;
+  imageStore(luxel_reflectivity, palette_coord, vec4(dynamic_light, 1.0));
+
+  // Store only the static light in the visual output.
+  imageStore(luxel_direct, palette_coord, vec4(static_light, 1.0));
 }
