@@ -24,6 +24,8 @@ in vec3 l_worldBinormal;
 in vec4 l_vertexColor;
 in vec4 l_eyePosition;
 
+const float PI = 3.14159265359;
+
 #ifdef LIGHTING
 
     uniform struct p3d_LightSourceParameters {
@@ -89,29 +91,36 @@ float intersectRaySphere(vec3 cameraPos, vec3 ray, vec3 sphereCenter, float sphe
   return (D > 0) ? (-B * sqrt(D)) : 0;
 }
 
-float Fresnel(vec3 vNormal, vec3 vEyeDir)
-{
-    float fresnel = clamp(1 - dot(vNormal, vEyeDir), 0, 1);
-    return fresnel * fresnel;
+vec3 fresnelSchlick(vec3 F0, float cosTheta) {
+  return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-float Fresnel4(vec3 vNormal, vec3 vEyeDir)
-{
-    float fresnel = clamp(1 - dot(vNormal, vEyeDir), 0, 1);
-    fresnel = fresnel * fresnel;
-    return fresnel * fresnel;
+float microfacetDistribution(float cosLh, float roughness) {
+  float alpha = roughness * roughness;
+  float alphaSq = alpha * alpha;
+  float denom = (cosLh * cosLh) * (alphaSq - 1.0) + 1.0;
+  return alphaSq / (PI * denom * denom);
 }
 
-float Fresnel(vec3 normal, vec3 eyeDir, float exponent)
-{
-    float fresnel = clamp(1 - dot(normal, eyeDir), 0, 1);
-    return pow(fresnel, exponent);
+float gaSchlickG1(float cosTheta, float k) {
+  return cosTheta / (cosTheta * (1.0 - k) + k);
 }
 
-float Fresnel(vec3 normal, vec3 eyeDir, vec3 ranges) {
-  float f = clamp(1 - dot(normal, eyeDir), 0, 1);
-  f = f * f - 0.5;
-  return ranges.y + (f >= 0 ? ranges.z : ranges.x) * f;
+float visibilityOcclusion(float cosLi, float cosLo, float roughness) {
+  float r = roughness + 1.0;
+  float k = (r * r) / 8.0;
+  return gaSchlickG1(cosLi, k) * gaSchlickG1(cosLo, k);
+}
+
+// Monte Carlo integration, approximate analytic version based on Dimitar Lazarov's work
+// https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile
+vec3 envBRDFApprox(vec3 SpecularColor, float Roughness, float NoV) {
+  const vec4 c0 = vec4(-1, -0.0275, -0.572, 0.022);
+  const vec4 c1 = vec4(1, 0.0425, 1.04, -0.04);
+  vec4 r = Roughness * c0 + c1;
+  float a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
+  vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
+  return SpecularColor * AB.x + AB.y;
 }
 
 vec3 ambientLookup(vec3 wnormal) {
@@ -162,28 +171,18 @@ vec3 diffuseTerm(vec3 L, vec3 normal) {
     diff = 2.0 * texture(lightWarpTexture, result).rgb;
   #endif
 
+  // Normalize it for energy conservation.
+  // http://blog.stevemcauley.com/2011/12/03/energy-conserving-wrapped-diffuse/
+  #ifdef HALFLAMBERT
+    diff *= 0.5;
+  #endif
+
   return diff;
 }
 
-void specularAndRimTerms(inout vec3 specularLighting,
-                         vec3 lightDir, vec3 eyeDir, vec3 worldNormal, float specularExponent,
-                         vec3 color) {
-  specularExponent *= 4.0;
-
-  // Blinn-Phong specular.  Half-angle instead of reflection vector.
-  vec3 halfDir = normalize(lightDir + eyeDir);
-  float NdotH = clamp(dot(worldNormal, halfDir), 0, 1);
-  specularLighting = vec3(pow(NdotH, specularExponent));
-
-  float NdotL = max(0.0, dot(worldNormal, lightDir));
-
-  specularLighting *= NdotL;
-  specularLighting *= color;
-}
-
 // Accumulates lighting for the given light index.
-void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting,
-             vec3 worldNormal, vec3 worldPos, vec3 eyeDir, float specularExponent) {
+void doLight(int i, inout vec3 lighting,
+             vec3 worldNormal, vec3 worldPos, vec3 eyeDir, vec3 specularity, float roughness, vec3 albedo) {
 
   bool isDirectional = p3d_LightSource[i].color.w == 1.0;
   bool isSpot = p3d_LightSource[i].direction.w == 1.0;
@@ -219,21 +218,31 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting,
     }
   }
 
-  diffuseLighting += lightColor * lightAtten * diffuseTerm(L, worldNormal);
+  float cosLightOut = clamp(abs(dot(worldNormal, eyeDir)), 0, 1);
+  vec3 halfAngle = normalize(L + eyeDir);
+  float cosHalfAngle = max(0.0, dot(worldNormal, halfAngle));
+  float cosLightIn = max(0.0, dot(worldNormal, L));
 
-  vec3 localSpecular = vec3(0.0);
-  specularAndRimTerms(specularLighting, L, eyeDir, worldNormal, specularExponent,
-                      lightColor * lightAtten);
-  specularLighting += localSpecular;
+  vec3 F = fresnelSchlick(specularity, max(0.0, dot(halfAngle, eyeDir)));
+  float D = microfacetDistribution(cosHalfAngle, roughness);
+  float V = visibilityOcclusion(cosLightIn, cosLightOut, roughness);
+
+  vec3 kd = vec3(1.0) - F;
+
+  vec3 localDiffuse = kd * albedo * diffuseTerm(L, worldNormal);
+  vec3 localSpecular = (F * D * V) / max(0.00001, 4.0 * cosLightIn * cosLightOut);
+  localSpecular *= cosLightIn;
+  lighting += (localDiffuse + localSpecular) * lightColor * lightAtten;
 }
 
-void doLighting(inout vec3 diffuseLighting, inout vec3 specularLighting,
-                vec3 worldNormal, vec3 worldPos, vec3 eyeDir, float specularExponent,
+void doLighting(inout vec3 lighting,
+                vec3 worldNormal, vec3 worldPos, vec3 eyeDir, vec3 specularity,
+                float roughness, vec3 albedo,
                 int numLights) {
   // Start diffuse at ambient color.
   for (int i = 0; i < numLights; i++) {
-    doLight(i, diffuseLighting, specularLighting, worldNormal, worldPos,
-            eyeDir, specularExponent);
+    doLight(i, lighting, worldNormal, worldPos, eyeDir,
+            specularity, roughness, albedo);
   }
 }
 
@@ -269,7 +278,7 @@ void main() {
 
   // Parallax mapping on iris
   float irisOffset = texture(corneaSampler, corneaUv).b;
-  vec2 parallaxVector = vec2(0, 0);//(tangentViewVector.xy * irisOffset * parallaxStrength) / (1.0 - tangentViewVector.z);
+  vec2 parallaxVector = vec2(0);//(tangentViewVector.xy * irisOffset * parallaxStrength) / max(0.00001, (1.0 - tangentViewVector.z));
   //parallaxVector.x = -parallaxVector.x;
 
   vec2 irisUv = sphereUv - parallaxVector;
@@ -281,8 +290,6 @@ void main() {
   // Sample 2D normal from texture
   vec3 corneaTangentNormal = vec3(0, 0, 1);
   vec4 corneaSample = texture(corneaSampler, corneaUv);
-  //outputColor = vec4(corneaSample.rgb * length(p3d_LightModel.ambient.rgb), 1);
-  //return;
   corneaTangentNormal.xy = corneaSample.rg - 0.5;
 
   // Scale strength of normal
@@ -294,10 +301,14 @@ void main() {
   // Normalize tangent vector
   corneaTangentNormal = normalize(corneaTangentNormal);
 
+  //outputColor = vec4(corneaTangentNormal.rgb * 0.5 + 0.5, 1);
+  //return;
+
   // Transform into world space
   //vec3 corneaWorldNormal = worldTangent * corneaTangentNormal.x;
+  //vec3 corneaWorldNormal = normalize(worldTangent * corneaTangentNormal.x + worldBinormal * corneaTangentNormal.y + worldNormal * corneaTangentNormal.z);
   //vec3 corneaWorldNormal = TangentToWorldNormalized(corneaTangentNormal, worldNormal, worldTangent, worldBinormal);
-  //outputColor = vec4(worldNormal * 0.5 + 0.5, 1.0);
+  //outputColor = vec4(corneaWorldNormal * 0.5 + 0.5, 1.0);
   //return;
 
   vec3 corneaWorldNormal = worldNormal;
@@ -326,28 +337,34 @@ void main() {
   irisTangentNormal.xy *= -2.5;
 
   vec3 totalRadiance = vec3(0);
-  vec3 totalSpecular = vec3(0);
-  vec3 ambientDiffuse = ambientLookup(corneaWorldNormal);
+  vec3 ambientLighting = vec3(0);
+  vec3 specularity = vec3(0.04);
+  float roughness = 0.2;
 
   // Do ligting
   #if defined(NUM_LIGHTS) && NUM_LIGHTS > 0
-    doLighting(totalRadiance, totalSpecular, corneaWorldNormal, worldPosition,
-               -worldViewVector, 1.0 + 120.0 * glossiness, NUM_LIGHTS);
+    doLighting(totalRadiance, corneaWorldNormal, worldPosition,
+               -worldViewVector, specularity, roughness, irisColor.rgb, NUM_LIGHTS);
   #endif
 
+  float NdotV = clamp(abs(dot(corneaWorldNormal, -worldViewVector)), 0, 1);
+
+  vec3 diffuseIrradiance = ambientLookup(corneaWorldNormal);
+  vec3 ambientLightingFresnel = fresnelSchlick(specularity, NdotV);
+  vec3 diffuseContributionFactor = vec3(1.0) - ambientLightingFresnel;
+  vec3 diffuseIBL = diffuseContributionFactor * irisColor.rgb * diffuseIrradiance;
   // Ambient occlusion
   vec3 ambientOcclFromTexture = texture(eyeAmbientOcclSampler, l_texcoord).rgb;
   vec3 ambientOcclColor = mix(ambientOcclColor, vec3(1.0), ambientOcclFromTexture.rgb);
-  ambientDiffuse *= ambientOcclColor;
+  diffuseIBL *= ambientOcclColor;
 
   vec3 corneaReflectionVector = reflect(worldViewVector.xyz, corneaWorldNormal.xyz);
-  vec3 reflection = texture(eyeReflectionCubemapSampler, corneaReflectionVector.xyz).rgb;
-  reflection *= length(ambientLookup(corneaWorldNormal));
+  vec3 specIrradiance = textureLod(eyeReflectionCubemapSampler, corneaReflectionVector.xyz, roughness * 9.0).rgb;
+  vec3 specIBL = specIrradiance * envBRDFApprox(specularity, roughness, NdotV);
+  ambientLighting = (diffuseIBL + specIBL);
 
-  irisLighting += (totalRadiance + ambientDiffuse) * irisColor.rgb;
-  irisLighting += totalSpecular;
+  irisLighting += totalRadiance + ambientLighting;
   irisLighting += corneaNoise * 0.1;
-  irisLighting += reflection.rgb;
   outputColor = vec4(irisLighting, 1);
 
   #ifdef FOG
