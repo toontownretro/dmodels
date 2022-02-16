@@ -37,5 +37,6 @@
     unlitNoMat.frag.glsl \
     unlitNoMat.vert.glsl \
     vertexLitGeneric_PBR.frag.glsl \
-    vertexLitGeneric_PBR.vert.glsl
+    vertexLitGeneric_PBR.vert.glsl \
+    source_sky.vert.glsl source_sky.frag.glsl
 #end install_shader
