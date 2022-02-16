@@ -253,8 +253,9 @@ void GetSpotlight(inout LightingParams_t params
 
 void GetDirectionalLight(inout LightingParams_t params
                          #ifdef HAS_SHADOW_SUNLIGHT
-                         , sampler2DArray shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
-                         mat4 shadowMVPs[PSSM_SPLITS], vec3 camPos, vec3 worldPos
+                         , sampler2D shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
+                         mat4 shadowMVPs[PSSM_SPLITS], vec4 atlasMinMax[PSSM_SPLITS],
+                         vec2 atlasScale[PSSM_SPLITS], vec3 camPos, vec3 worldPos
                          #endif
                          )
 {
@@ -266,7 +267,7 @@ void GetDirectionalLight(inout LightingParams_t params
     #ifdef HAS_SHADOW_SUNLIGHT
         float lshad = 0.0;
         GetSunShadow(lshad, shadowSampler, shadowCoords, params.NdotL,
-            shadowMVPs, camPos, worldPos);
+            shadowMVPs, atlasMinMax, atlasScale, camPos, worldPos);
         params.attenuation *= lshad;
     #endif
 

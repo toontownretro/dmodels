@@ -248,9 +248,9 @@ float SampleCascade8(sampler2DArray shadowSampler, vec3 proj, int cascade, float
     return step(depthCmp, texture(shadowSampler, vec3(proj.xy + (poissonDisk_8[i].xy * SHADOW_BLUR), cascade)).x);
 }
 
-float SampleCascadeGather(sampler2DArray shadowSampler, vec3 coords, float depthCmp)
+float SampleCascadeGather(sampler2D shadowSampler, vec3 coords, float depthCmp)
 {
-    vec4 shadow = step(vec4(depthCmp), textureGather(shadowSampler, coords, 0));
+    vec4 shadow = step(vec4(depthCmp), textureGather(shadowSampler, coords.xy, 0));
     float avg = dot(shadow, vec4(0.25));
     return avg;
 }
@@ -265,7 +265,7 @@ float noise(vec2 seed)
     return fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-float DoShadowGather(sampler2DArray shadowSampler, vec3 proj, int cascade, float depthCmp)
+float DoShadowGather(sampler2D shadowSampler, vec3 proj, int cascade, float depthCmp)
 {
     float shad = 0.0;
     for (int i = 0; i < 8; i++)
@@ -362,7 +362,13 @@ float DoShadowPoissonV2(sampler2DArray shadowSampler, vec3 proj, int cascade, fl
     return lshad;
 }
 
-int FindCascade(vec4 shadowCoords[PSSM_SPLITS], inout vec3 proj, inout float depthCmp)
+float remapVal(float val, float A, float B, float C, float D) {
+  float cVal = (val - A) / (B - A);
+  cVal = clamp(cVal, 0.0, 1.0);
+  return C + (D - C) * cVal;
+}
+
+int FindCascade(vec4 shadowCoords[PSSM_SPLITS], vec4 atlasMinMax[PSSM_SPLITS], vec2 atlasScale[PSSM_SPLITS], inout vec3 proj, inout float depthCmp)
 {
 	for (int i = 0; i < PSSM_SPLITS; i++)
 	{
@@ -370,6 +376,11 @@ int FindCascade(vec4 shadowCoords[PSSM_SPLITS], inout vec3 proj, inout float dep
 		if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0)
 		{
 			depthCmp = proj.z;
+            proj.x = remapVal(proj.x, 0.0, 1.0, atlasMinMax[i].x, atlasMinMax[i].y);
+            proj.y = remapVal(proj.y, 0.0, 1.0, atlasMinMax[i].z, atlasMinMax[i].w);
+            //proj.xy *= atlasScale[i];
+            //proj.x += atlasMinMax[i].x;
+            //proj.y -= atlasMinMax[i].z;
 			return i;
 		}
 	}
@@ -398,8 +409,8 @@ void GetLightShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoord
     lshad /= 16;
 }
 
-void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
-                  vec3 NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
+void GetSunShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
+                  vec3 NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec4 atlasMinMax[PSSM_SPLITS], vec2 atlasScale[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
 {
 	lshad = 0.0;
 
@@ -418,7 +429,7 @@ void GetSunShadow(inout float lshad, sampler2DArray shadowSampler, vec4 shadowCo
 
 	vec3 proj = vec3(0);
 	float depthCmp = 0.0;
-	int cascade = FindCascade(shadowCoords, proj, depthCmp);
+	int cascade = FindCascade(shadowCoords, atlasMinMax, atlasScale, proj, depthCmp);
     mat4 mvp = shadowMVPs[cascade];
 
     mat2 rotationMat = mat2(1, 0, 0, 1);

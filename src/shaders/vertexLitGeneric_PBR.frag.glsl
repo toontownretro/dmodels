@@ -160,8 +160,10 @@ uniform vec4 p3d_ColorScale;
     } p3d_LightSource[NUM_LIGHTS];
 
     #ifdef HAS_SHADOW_SUNLIGHT
-        uniform sampler2DArray p3d_CascadeShadowMap;
+        uniform sampler2D p3d_CascadeShadowMap;
         uniform mat4 p3d_CascadeMVPs[PSSM_SPLITS];
+        uniform vec4 p3d_CascadeAtlasMinMax[PSSM_SPLITS];
+        uniform vec2 p3d_CascadeAtlasScale[PSSM_SPLITS];
         in vec4 l_pssmCoords[PSSM_SPLITS];
         uniform vec4 wspos_view;
     #endif
@@ -409,7 +411,8 @@ void main()
                 GetDirectionalLight(params
                                     #ifdef HAS_SHADOW_SUNLIGHT
                                         , p3d_CascadeShadowMap, l_pssmCoords,
-                                        p3d_CascadeMVPs, wspos_view.xyz,
+                                        p3d_CascadeMVPs, p3d_CascadeAtlasMinMax,
+                                        p3d_CascadeAtlasScale, wspos_view.xyz,
                                         l_worldPosition.xyz
                                     #endif // HAS_SHADOW_SUNLIGHT
                 );
