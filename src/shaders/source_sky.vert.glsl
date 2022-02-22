@@ -34,7 +34,7 @@ out vec2 l_texcoord01;
 out vec2 l_texcoord11;
 out vec2 l_texcoord_pixels;
 
-#else
+#else // COMPRESSED_HDR
 
 out vec2 l_texcoord;
 
@@ -51,17 +51,6 @@ const ivec3 st_to_vec[6] = ivec3[6](
 
   ivec3(-2,-1,3),
   ivec3(2,-1,-3)
-);
-
-// Horizontal sky face texcoords are offset half way up
-// so the bottom of the texture is at the horizon line.
-const vec2 tex_ofs[6] = vec2[6](
-  vec2(0, -0.5),
-  vec2(0, -0.5),
-  vec2(0, -0.5),
-  vec2(0, -0.5),
-  vec2(0, 0),
-  vec2(0, 0)
 );
 
 void
@@ -93,7 +82,7 @@ make_sky_vec(float s, float t, int axis, out vec3 position, out vec2 texcoord) {
 
   //t = 1.0 - t;
   position = v;
-  texcoord = vec2(s, t) + tex_ofs[axis];
+  texcoord = vec2(s, t);
 }
 
 void
@@ -104,7 +93,7 @@ main() {
 
   gl_Position = p3d_ViewProjectionMatrix * vec4(skyPos, 1);
 
-  texcoord = (vec3(texcoord, 1) * mat3(skyTexTransform)).xy;
+  texcoord = (skyTexTransform * vec4(texcoord, 1, 1)).xy;
 
 #if COMPRESSED_HDR
   l_texcoord00.x = texcoord.x - TEXEL_XINCR;
