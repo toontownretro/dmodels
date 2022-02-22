@@ -110,6 +110,8 @@ uniform struct p3d_LightSourceParameters {
   uniform vec4 wspos_view;
 #endif
 
+#endif // NUM_LIGHTS
+
 // We may have an L2 spherical harmonics ambient
 // probe...
 #if AMBIENT_PROBE
@@ -121,8 +123,6 @@ uniform struct {
   vec4 ambient;
 } p3d_LightModel;
 #endif
-
-#endif // LIGHTING
 
 out vec4 fragColor;
 
