@@ -30,7 +30,7 @@
 
 uniform float osg_FrameTime;
 
-const float SHADOW_SIZE = 1.0 / SHADOW_TEXEL_SIZE;
+//const float SHADOW_SIZE = 1.0 / SHADOW_TEXEL_SIZE;
 
 #define DO_POISSON 1
 #define NUM_POISSON 13
@@ -440,6 +440,7 @@ void GetSunShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords[
     //filterSize *= (1.0 + 10.5 * length(worldPosition - cameraPos) / 100);
     //filterSize *= 0.0000001;
     vec2 filterSize = vec2(filterRadius);
+    filterSize *= 1.0 / textureSize(shadowSampler, 0);
 
     #ifdef DO_PCSS
         float numBlockers = 0.0;
@@ -470,14 +471,42 @@ void GetSunShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords[
         filterSize *= penumbraSize;
     #endif
 
-    for (int i = 0; i < 16; i++) {
-        vec2 offset = halton_2D_16[i];
-        lshad += SampleCascadeGather(
-            shadowSampler,
-            vec3(proj.xy + (rotationMat * offset) * filterSize, cascade),
-            depthCmp);
+#if 0
+    // 9 taps.
+    vec4 oneTaps = vec4(0);
+    oneTaps.x = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( filterSize.x,  filterSize.y), 0).x);
+    oneTaps.y = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2(-filterSize.x,  filterSize.y), 0).x);
+    oneTaps.z = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( filterSize.x, -filterSize.y), 0).x);
+    oneTaps.w = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2(-filterSize.x, -filterSize.y), 0).x);
+    float flOneTaps = dot(oneTaps, vec4(1.0 / 16.0));
+
+    vec4 twoTaps = vec4(0);
+    twoTaps.x = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( filterSize.x,  0), 0).x);
+    twoTaps.y = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2(-filterSize.x,  0), 0).x);
+    twoTaps.z = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( 0, -filterSize.y), 0).x);
+    twoTaps.w = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( 0,  filterSize.y), 0).x);
+    float flTwoTaps = dot(twoTaps, vec4(2.0 / 16.0));
+
+    float flCenterTap = step(depthCmp, textureLod(shadowSampler, proj.xy, 0).x) * (4.0 / 16.0);
+
+    // Sum all 9 taps.
+    lshad = flOneTaps + flTwoTaps + flCenterTap;
+#endif
+
+    lshad = step(depthCmp, textureLod(shadowSampler, proj.xy, 0).x);
+    for (int i = 0; i < 8; i++) {
+        lshad += step(depthCmp, textureLod(shadowSampler, proj.xy + (halton_2D_8[i] * filterSize), 0).x);
     }
-    lshad /= 16;
+    lshad *= 1.0/9.0;
+
+    //for (int i = 0; i < 16; i++) {
+    //    vec2 offset = halton_2D_16[i];
+    //    lshad += SampleCascadeGather(
+    //        shadowSampler,
+    //        vec3(proj.xy + (rotationMat * offset) * filterSize, cascade),
+    //        depthCmp);
+    //}
+    //lshad /= 16;
 
 	//lshad = DoShadowGather(shadowSampler, proj, cascade, depthCmp);
 
