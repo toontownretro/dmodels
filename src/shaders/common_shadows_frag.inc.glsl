@@ -409,7 +409,7 @@ void GetLightShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoord
     lshad /= 16;
 }
 
-void GetSunShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
+void GetSunShadow(inout float lshad, sampler2DShadow shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
                   vec3 NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec4 atlasMinMax[PSSM_SPLITS], vec2 atlasScale[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
 {
 	lshad = 0.0;
@@ -421,10 +421,10 @@ void GetSunShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords[
 	// will cause brush faces facing away from the fake shadows
 	// to be dark.
 	//#if !defined(BUMPED_LIGHTMAP) && !defined(FLAT_LIGHTMAP)
-		//if (max3(NdotL) < 0.0)
-	///	//{
-		//	return;
-		//}
+		if (max3(NdotL) <= 0.0)
+		{
+			return;
+		}
 	//#endif
 
 	vec3 proj = vec3(0);
@@ -471,33 +471,33 @@ void GetSunShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoords[
         filterSize *= penumbraSize;
     #endif
 
-#if 0
+#if 1
     // 9 taps.
     vec4 oneTaps = vec4(0);
-    oneTaps.x = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( filterSize.x,  filterSize.y), 0).x);
-    oneTaps.y = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2(-filterSize.x,  filterSize.y), 0).x);
-    oneTaps.z = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( filterSize.x, -filterSize.y), 0).x);
-    oneTaps.w = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2(-filterSize.x, -filterSize.y), 0).x);
+    oneTaps.x = textureLod(shadowSampler, proj + vec3( filterSize.x,  filterSize.y, 0), 0);
+    oneTaps.y = textureLod(shadowSampler, proj + vec3(-filterSize.x,  filterSize.y, 0), 0);
+    oneTaps.z = textureLod(shadowSampler, proj + vec3( filterSize.x, -filterSize.y, 0), 0);
+    oneTaps.w = textureLod(shadowSampler, proj + vec3(-filterSize.x, -filterSize.y, 0), 0);
     float flOneTaps = dot(oneTaps, vec4(1.0 / 16.0));
 
     vec4 twoTaps = vec4(0);
-    twoTaps.x = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( filterSize.x,  0), 0).x);
-    twoTaps.y = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2(-filterSize.x,  0), 0).x);
-    twoTaps.z = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( 0, -filterSize.y), 0).x);
-    twoTaps.w = step(depthCmp, textureLod(shadowSampler, proj.xy + vec2( 0,  filterSize.y), 0).x);
+    twoTaps.x = textureLod(shadowSampler, proj + vec3( filterSize.x,  0, 0), 0);
+    twoTaps.y = textureLod(shadowSampler, proj + vec3(-filterSize.x,  0, 0), 0);
+    twoTaps.z = textureLod(shadowSampler, proj + vec3( 0, -filterSize.y, 0), 0);
+    twoTaps.w = textureLod(shadowSampler, proj + vec3( 0,  filterSize.y, 0), 0);
     float flTwoTaps = dot(twoTaps, vec4(2.0 / 16.0));
 
-    float flCenterTap = step(depthCmp, textureLod(shadowSampler, proj.xy, 0).x) * (4.0 / 16.0);
+    float flCenterTap = textureLod(shadowSampler, proj, 0) * (4.0 / 16.0);
 
     // Sum all 9 taps.
     lshad = flOneTaps + flTwoTaps + flCenterTap;
 #endif
 
-    lshad = step(depthCmp, textureLod(shadowSampler, proj.xy, 0).x);
-    for (int i = 0; i < 8; i++) {
-        lshad += step(depthCmp, textureLod(shadowSampler, proj.xy + (halton_2D_8[i] * filterSize), 0).x);
-    }
-    lshad *= 1.0/9.0;
+    //lshad = textureLod(shadowSampler, proj, 0);
+    //for (int i = 0; i < 8; i++) {
+    //    lshad += textureLod(shadowSampler, vec3(proj.xy + (halton_2D_8[i] * filterSize), proj.z), 0);
+    //}
+    //lshad *= 1.0/8.0;
 
     //for (int i = 0; i < 16; i++) {
     //    vec2 offset = halton_2D_16[i];
