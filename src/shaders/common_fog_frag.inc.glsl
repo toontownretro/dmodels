@@ -29,7 +29,8 @@ uniform struct p3d_FogParameters {
 
 void GetFogLinear(inout vec4 result, vec4 fogColor, float dist, vec4 fogData)
 {
-	result.rgb = mix(fogColor.rgb, result.rgb, clamp((fogData.z - dist) * fogData.w, 0, 1));
+	float fogFactor = clamp(1.0 - ((fogData.z - dist) * fogData.w), 0, 1);
+	result.rgb = mix(result.rgb, fogColor.rgb, fogFactor * fogFactor);
 }
 
 void GetFogExp(inout vec4 result, vec4 fogColor, float dist, float density)
