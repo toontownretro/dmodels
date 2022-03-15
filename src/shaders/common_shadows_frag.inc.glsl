@@ -362,25 +362,13 @@ float DoShadowPoissonV2(sampler2DArray shadowSampler, vec3 proj, int cascade, fl
     return lshad;
 }
 
-float remapVal(float val, float A, float B, float C, float D) {
-  float cVal = (val - A) / (B - A);
-  cVal = clamp(cVal, 0.0, 1.0);
-  return C + (D - C) * cVal;
-}
-
-int FindCascade(vec4 shadowCoords[PSSM_SPLITS], vec4 atlasMinMax[PSSM_SPLITS], vec2 atlasScale[PSSM_SPLITS], inout vec3 proj, inout float depthCmp)
+int FindCascade(vec4 shadowCoords[PSSM_SPLITS], inout vec3 proj)
 {
 	for (int i = 0; i < PSSM_SPLITS; i++)
 	{
 		proj = shadowCoords[i].xyz;
 		if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0)
 		{
-			depthCmp = proj.z;
-            proj.x = remapVal(proj.x, 0.0, 1.0, atlasMinMax[i].x, atlasMinMax[i].y);
-            proj.y = remapVal(proj.y, 0.0, 1.0, atlasMinMax[i].z, atlasMinMax[i].w);
-            //proj.xy *= atlasScale[i];
-            //proj.x += atlasMinMax[i].x;
-            //proj.y -= atlasMinMax[i].z;
 			return i;
 		}
 	}
@@ -409,114 +397,66 @@ void GetLightShadow(inout float lshad, sampler2D shadowSampler, vec4 shadowCoord
     lshad /= 16;
 }
 
-void GetSunShadow(inout float lshad, sampler2DShadow shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
-                  vec3 NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec4 atlasMinMax[PSSM_SPLITS], vec2 atlasScale[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
+void GetSunShadow(inout float lshad, sampler2DArrayShadow shadowSampler, vec4 shadowCoords[PSSM_SPLITS],
+                  vec3 NdotL, mat4 shadowMVPs[PSSM_SPLITS], vec3 cameraPos, vec3 worldPosition)
 {
 	lshad = 0.0;
-
-	// We can guarantee that the pixel is in shadow if
-	// it's facing away from the light source.
-	//
-	// We only do this on models. Doing this on brushes
-	// will cause brush faces facing away from the fake shadows
-	// to be dark.
-	//#if !defined(BUMPED_LIGHTMAP) && !defined(FLAT_LIGHTMAP)
-		if (max3(NdotL) <= 0.0)
-		{
-			return;
-		}
-	//#endif
+	if (NdotL.x <= 0.0) {
+		return;
+    }
 
 	vec3 proj = vec3(0);
-	float depthCmp = 0.0;
-	int cascade = FindCascade(shadowCoords, atlasMinMax, atlasScale, proj, depthCmp);
-    mat4 mvp = shadowMVPs[cascade];
+	int cascade = FindCascade(shadowCoords, proj);
 
-    mat2 rotationMat = mat2(1, 0, 0, 1);
+    vec4 coords = vec4(proj.xy, cascade, proj.z);
 
-    float filterRadius = SHADOW_BLUR;
+    ivec3 texSize = textureSize(shadowSampler, 0);
+    vec2 filterSize = vec2(1.0 / float(texSize.x), 1.0 / float(texSize.y));
 
-    //vec2 filterSize = FindFilterSize(mvp, worldPosition, filterRadius);
-    //filterSize *= (1.0 + 10.5 * length(worldPosition - cameraPos) / 100);
-    //filterSize *= 0.0000001;
-    vec2 filterSize = vec2(filterRadius);
-    filterSize *= 1.0 / textureSize(shadowSampler, 0);
+    switch (cascade) {
+    case 0:
+    case 1:
+        {
+            // 9 taps. PCF3x3Box.
+            vec4 oneTaps = vec4(0);
+            oneTaps.x = texture(shadowSampler, coords + vec4( filterSize.x,  filterSize.y, 0, 0));
+            oneTaps.y = texture(shadowSampler, coords + vec4(-filterSize.x,  filterSize.y, 0, 0));
+            oneTaps.z = texture(shadowSampler, coords + vec4( filterSize.x, -filterSize.y, 0, 0));
+            oneTaps.w = texture(shadowSampler, coords + vec4(-filterSize.x, -filterSize.y, 0, 0));
+            float flOneTaps = dot(oneTaps, vec4(1.0 / 9.0));
 
-    #ifdef DO_PCSS
-        float numBlockers = 0.0;
-        float sumBlockers = 0.0;
-        for (int i = 0; i < 16; i++) {
-            vec2 offset = halton_2D_16[i];
+            vec4 twoTaps = vec4(0);
+            twoTaps.x = texture(shadowSampler, coords + vec4( filterSize.x,  0, 0, 0));
+            twoTaps.y = texture(shadowSampler, coords + vec4(-filterSize.x,  0, 0, 0));
+            twoTaps.z = texture(shadowSampler, coords + vec4( 0,  -filterSize.y, 0, 0));
+            twoTaps.w = texture(shadowSampler, coords + vec4( 0,  filterSize.y, 0, 0));
+            float flTwoTaps = dot(twoTaps, vec4(1.0 / 9.0));
 
-            offset = rotationMat * offset;
+            float flCenterTap = texture(shadowSampler, coords) * (1.0 / 9.0);
 
-            vec4 sampledDepth = textureGather(shadowSampler,
-                vec3(proj.xy + offset * filterSize * 4.0, cascade), 0);
-
-            vec4 factor4 = step(sampledDepth, vec4(depthCmp));
-            float factor = factor4.x + factor4.y + factor4.z + factor4.w;
-            numBlockers += factor;
-            sumBlockers += (sampledDepth.x + sampledDepth.y +
-                sampledDepth.z + sampledDepth.w) * factor;
+            // Sum all 9 taps.
+            lshad = flOneTaps + flTwoTaps + flCenterTap;
         }
-
-        // Examine ratio between blockers and non-blockers
-        float avgBlockerDepth = sumBlockers / numBlockers;
-
-        // Penumbra size also takse average blocker depth into acc
-        float penumbraSize = max(PCSS_MIN_PENUMBRA_SIZE * 0.03, depthCmp - avgBlockerDepth) /
-            depthCmp * PCSS_PENUMBRA_SIZE;
-
-        // Apply penumbra size
-        filterSize *= penumbraSize;
-    #endif
-
-#if 1
-    // 9 taps.
-    vec4 oneTaps = vec4(0);
-    oneTaps.x = textureLod(shadowSampler, proj + vec3( filterSize.x,  filterSize.y, 0), 0);
-    oneTaps.y = textureLod(shadowSampler, proj + vec3(-filterSize.x,  filterSize.y, 0), 0);
-    oneTaps.z = textureLod(shadowSampler, proj + vec3( filterSize.x, -filterSize.y, 0), 0);
-    oneTaps.w = textureLod(shadowSampler, proj + vec3(-filterSize.x, -filterSize.y, 0), 0);
-    float flOneTaps = dot(oneTaps, vec4(1.0 / 16.0));
-
-    vec4 twoTaps = vec4(0);
-    twoTaps.x = textureLod(shadowSampler, proj + vec3( filterSize.x,  0, 0), 0);
-    twoTaps.y = textureLod(shadowSampler, proj + vec3(-filterSize.x,  0, 0), 0);
-    twoTaps.z = textureLod(shadowSampler, proj + vec3( 0, -filterSize.y, 0), 0);
-    twoTaps.w = textureLod(shadowSampler, proj + vec3( 0,  filterSize.y, 0), 0);
-    float flTwoTaps = dot(twoTaps, vec4(2.0 / 16.0));
-
-    float flCenterTap = textureLod(shadowSampler, proj, 0) * (4.0 / 16.0);
-
-    // Sum all 9 taps.
-    lshad = flOneTaps + flTwoTaps + flCenterTap;
-#endif
-
-    //lshad = textureLod(shadowSampler, proj, 0);
-    //for (int i = 0; i < 8; i++) {
-    //    lshad += textureLod(shadowSampler, vec3(proj.xy + (halton_2D_8[i] * filterSize), proj.z), 0);
-    //}
-    //lshad *= 1.0/8.0;
-
-    //for (int i = 0; i < 16; i++) {
-    //    vec2 offset = halton_2D_16[i];
-    //    lshad += SampleCascadeGather(
-    //        shadowSampler,
-    //        vec3(proj.xy + (rotationMat * offset) * filterSize, cascade),
-    //        depthCmp);
-    //}
-    //lshad /= 16;
-
-	//lshad = DoShadowGather(shadowSampler, proj, cascade, depthCmp);
-
-    //#if SHADER_QUALITY == SHADERQUALITY_HIGH
-        //lshad = DoShadowPoisson16Sample(shadowSampler, proj, cascade, depthCmp);
-    //#elif SHADER_QUALITY == SHADERQUALITY_MEDIUM
-        //lshad = DoShadowPCF5Tap(shadowSampler, proj, cascade, depthCmp);
-    //#elif SHADER_QUALITY == SHADERQUALITY_LOW
-        //lshad = DoShadowSimple(shadowSampler, proj, cascade, depthCmp);
-    //#endif
+        break;
+    case 2:
+        {
+            // 4 taps.
+            vec4 oneTaps = vec4(0);
+            oneTaps.x = texture(shadowSampler, coords + vec4( filterSize.x,  filterSize.y, 0, 0));
+            oneTaps.y = texture(shadowSampler, coords + vec4(-filterSize.x,  filterSize.y, 0, 0));
+            oneTaps.z = texture(shadowSampler, coords + vec4( filterSize.x, -filterSize.y, 0, 0));
+            oneTaps.w = texture(shadowSampler, coords + vec4(-filterSize.x, -filterSize.y, 0, 0));
+            lshad = dot(oneTaps, vec4(0.25));
+        }
+        break;
+    case 3:
+    default:
+        {
+            // 1 tap.
+            lshad = texture(shadowSampler, coords);
+        }
+        break;
+    }
 }
 
 void DoBlendShadow(inout vec3 diffuseLighting, sampler2DArray shadowSampler,

@@ -20,14 +20,6 @@ uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];
 uniform sampler2D baseTextureSampler;
 #endif
 
-in vec2 l_clipPosition;
-//flat in int l_instanceID;
-flat in vec4 atlasMinMax;
-
-out vec4 p3d_FragColor;
-
-//uniform vec2 p3d_WindowSize;
-
 void main() {
   // Clipping first!
   #if defined(NUM_CLIP_PLANES) && NUM_CLIP_PLANES > 0
@@ -38,16 +30,6 @@ void main() {
       }
     }
   #endif
-
-  //vec2 clip = gl_FragCoord.xy / vec2(800.0, 600.0);
-
-  // Clip to cascade atlas region interiors.
-  if ((l_clipPosition.x < atlasMinMax.x) ||
-      (l_clipPosition.x > atlasMinMax.y) ||
-      (l_clipPosition.y < atlasMinMax.z) ||
-      (l_clipPosition.y > atlasMinMax.w)) {
-    discard;
-  }
 
   #if defined(TRANSPARENT) || defined(ALPHA_TEST)
     #ifdef BASETEXTURE
@@ -61,6 +43,4 @@ void main() {
       discard;
     }
   #endif
-
-  p3d_FragColor = vec4(1.0);
 }

@@ -20,8 +20,6 @@ uniform vec4 p3d_WorldClipPlane[NUM_CLIP_PLANES];
 uniform sampler2D baseTextureSampler;
 #endif
 
-out vec4 p3d_FragColor;
-
 void main() {
   // Clipping first!
   #if defined(NUM_CLIP_PLANES) && NUM_CLIP_PLANES > 0
@@ -45,6 +43,4 @@ void main() {
       discard;
     }
   #endif
-
-  p3d_FragColor = vec4(1.0);
 }

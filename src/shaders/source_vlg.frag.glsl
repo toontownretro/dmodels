@@ -106,7 +106,7 @@ uniform struct p3d_LightSourceParameters {
 } p3d_LightSource[NUM_LIGHTS];
 
 #ifdef HAS_SHADOW_SUNLIGHT
-  uniform sampler2DArray p3d_CascadeShadowMap;
+  uniform sampler2DArrayShadow p3d_CascadeShadowMap;
   uniform mat4 p3d_CascadeMVPs[PSSM_SPLITS];
   in vec4 l_pssmCoords[PSSM_SPLITS];
   uniform vec4 wspos_view;

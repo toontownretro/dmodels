@@ -22,7 +22,7 @@
 // FIXME: Make these configurable
 #define SLOPE_BIAS 0.11
 #define NORMAL_BIAS 0.3
-#define FIXED_BIAS 0.05
+#define FIXED_BIAS 0.1
 
 vec2 GetShadowBias(vec3 n, vec3 l) {
     float cosAlpha = clamp(dot(n, l), 0, 1);

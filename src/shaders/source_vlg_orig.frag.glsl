@@ -102,9 +102,9 @@ uniform struct p3d_LightSourceParameters {
 } p3d_LightSource[NUM_LIGHTS];
 
 #ifdef HAS_SHADOW_SUNLIGHT
-  uniform sampler2DShadow p3d_CascadeShadowMap;
-  uniform vec4 p3d_CascadeAtlasMinMax[PSSM_SPLITS];
-  uniform vec2 p3d_CascadeAtlasScale[PSSM_SPLITS];
+  uniform sampler2DArrayShadow p3d_CascadeShadowMap;
+  //uniform vec4 p3d_CascadeAtlasMinMax[PSSM_SPLITS];
+  //uniform vec2 p3d_CascadeAtlasScale[PSSM_SPLITS];
   uniform mat4 p3d_CascadeMVPs[PSSM_SPLITS];
   in vec4 l_pssmCoords[PSSM_SPLITS];
   uniform vec4 wspos_view;
@@ -276,7 +276,7 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
   #ifdef HAS_SHADOW_SUNLIGHT
     if (isDirectional) {
       GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_pssmCoords, vec3(max(0.0, dot(L, worldNormal))),
-        p3d_CascadeMVPs, p3d_CascadeAtlasMinMax, p3d_CascadeAtlasScale, wspos_view.xyz, worldPos);
+                   p3d_CascadeMVPs, wspos_view.xyz, worldPos);
     }
   #endif
 
