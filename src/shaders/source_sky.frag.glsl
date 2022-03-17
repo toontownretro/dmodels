@@ -1,5 +1,7 @@
 #version 330
 
+#pragma combo COMPRESSED_HDR 0 1
+
 #if COMPRESSED_HDR
 
 in vec2 l_texcoord00;

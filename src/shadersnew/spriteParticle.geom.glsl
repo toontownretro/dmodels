@@ -1,5 +1,7 @@
 #version 330
 
+#pragma combo BLAH 0 1
+
 /**
  * PANDA 3D SOFTWARE
  * Copyright (c) Carnegie Mellon University.  All rights reserved.
@@ -38,6 +40,7 @@ in vec2 v_size[];
 out vec2 g_tex_coord;
 out vec4 g_vertex_color;
 out vec4 g_world_position;
+out vec4 g_eye_position;
 
 /**
  * Rotates the indicated point angle degrees around center.
@@ -78,6 +81,7 @@ main() {
     gl_Position = p3d_ProjectionMatrix * eye_pos;
 
     g_world_position = p3d_ViewMatrixInverse * eye_pos;
+    g_eye_position = eye_pos;
 
     vec2 texcoord = vec2(-corners[i].x * 0.5 + 0.5, corners[i].y * 0.5 + 0.5);
 

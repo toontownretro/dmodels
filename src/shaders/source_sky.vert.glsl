@@ -7,6 +7,8 @@
 // into RGBA8, with the alpha channel being used as a scalar.  Manual bilinear
 // interpolation is required.
 
+#pragma combo COMPRESSED_HDR 0 1
+
 uniform mat4 p3d_ViewProjectionMatrix;
 uniform mat4 p3d_ModelMatrix;
 

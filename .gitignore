@@ -4,6 +4,7 @@
 *.dat
 *.txo
 *.txo.pz
+*.sho
 /built/
 Makefile
 bams/
