@@ -76,7 +76,7 @@ trace_ray(vec3 p_from, vec3 p_to, out uint r_triangle, out vec3 r_barycentric) {
   LightmapVertex vert0, vert1, vert2;
 
   uint iters = 0;
-  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size)))) {
+  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size))) && iters < 1000) {
     uvec2 cell_data = texelFetch(grid, icell, 0).xy;
     if (cell_data.x > 0) { // Triangle here.
       uint hit = RAY_MISS;

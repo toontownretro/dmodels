@@ -61,7 +61,7 @@ trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
   vec3 side = (sign(rel_cell) * (vec3(icell) - from_cell) + (sign(rel_cell) * 0.5) + 0.5) * delta;
 
   uint iters = 0;
-  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size)))) {
+  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size))) && iters < 1000) {
     uvec2 cell_data = texelFetch(grid, icell, 0).xy;
     if (cell_data.x > 0) { // Triangle here.
       uint hit = RAY_MISS;
