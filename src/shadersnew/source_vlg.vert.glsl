@@ -1,9 +1,11 @@
 #version 330
 
 #pragma combo SKINNING 0 1
+#pragma combo HAS_SHADOW_SUNLIGHT 0 1
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shadersnew/common_vert.inc.glsl"
+#include "shadersnew/common_shadows_vert.inc.glsl"
 
 // Per-view uniforms.
 uniform mat4 p3d_ViewMatrix;
@@ -18,6 +20,20 @@ uniform mat4 p3d_TransformTable[120];
 
 // Per-material uniforms.
 uniform vec4 p3d_ColorScale;
+
+#if HAS_SHADOW_SUNLIGHT
+uniform struct p3d_LightSourceParameters {
+  vec4 color;
+  vec4 position;
+  vec4 direction;
+  vec4 spotParams;
+  vec3 attenuation;
+} p3d_LightSource[4];
+uniform mat4 p3d_CascadeMVPs[4];
+out vec4 l_cascadeCoords[4];
+layout(constant_id = 0) const int CSM_LIGHT_ID = 0;
+layout(constant_id = 1) const int NUM_CASCADES = 0;
+#endif
 
 // Vertex shader inputs.
 in vec4 p3d_Vertex;
@@ -74,4 +90,10 @@ main() {
   l_vertex_color = vertex_color * color_scale;
 
   l_eye_pos = eye_pos;
+
+#if HAS_SHADOW_SUNLIGHT
+  ComputeSunShadowPositions(l_world_normal, l_world_pos,
+                            p3d_LightSource[CSM_LIGHT_ID].direction.xyz,
+                            p3d_CascadeMVPs, l_cascadeCoords, NUM_CASCADES);
+#endif // HAS_SHADOW_SUNLIGHT
 }

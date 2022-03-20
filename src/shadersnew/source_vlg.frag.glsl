@@ -13,10 +13,10 @@
 #pragma combo ENVMAP          0 1
 #pragma combo FOG             0 1
 #pragma combo ALPHA_TEST      0 1
-//#pragma combo HAS_SHADOW_SUNLIGHT 0 1
+#pragma combo HAS_SHADOW_SUNLIGHT 0 1
 
 // All of these are dependent on direct lighting.
-#pragma skip $[and $[not $[DIRECT_LIGHT]],$[PHONGWARP],$[LIGHTWARP]]
+#pragma skip $[and $[not $[DIRECT_LIGHT]],$[or $[PHONGWARP],$[LIGHTWARP],$[HAS_SHADOW_SUNLIGHT]]]
 // These are dependent on phong.
 #pragma skip $[and $[not $[PHONG]],$[or $[PHONGWARP],$[RIMLIGHT]]]
 // These are dependent on selfillum.
@@ -26,6 +26,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shadersnew/common_frag.inc.glsl"
+#include "shadersnew/common_shadows_frag.inc.glsl"
 
 // Pixel shader inputs.
 in vec4 l_world_pos;
@@ -49,14 +50,11 @@ uniform struct p3d_LightSourceParameters {
 layout(constant_id = 0) const int NUM_LIGHTS = 0;
 layout(constant_id = 1) const bool HALFLAMBERT = false;
 
-//#if HAS_SHADOW_SUNLIGHT
-//#define MAX_CASCADES 4
-//uniform sampler2DArrayShadow p3d_CascadeShadowMap;
-//uniform mat4 p3d_CascadeMVPs[MAX_CASCADES];
-//in vec4 l_pssmCoords[MAX_CASCADES];
-//uniform vec4 wspos_view;
-//layout(constant_id = 6) const int NUM_CASCADES = 0;
-//#endif
+#if HAS_SHADOW_SUNLIGHT
+uniform sampler2DArrayShadow p3d_CascadeShadowMap;
+in vec4 l_cascadeCoords[4];
+layout(constant_id = 6) const int NUM_CASCADES = 0;
+#endif // HAS_SHADOW_SUNLIGHT
 
 #endif // DIRECT_LIGHT
 
@@ -80,7 +78,6 @@ layout(constant_id = 9) const int FOG_MODE = FM_linear;
 uniform struct p3d_FogParameters {
   vec4 color;
   float density;
-  float start;
   float end;
   float scale; // 1.0 / (end - start)
 } p3d_Fog;
@@ -191,10 +188,9 @@ ambientLookup(vec3 wnormal) {
 }
 
 #if DIRECT_LIGHT
-vec3 diffuseTerm(vec3 L, vec3 normal, float shadow) {
+vec3 diffuseTerm(float NdotL, float shadow) {
   float result;
-  float NdotL = dot(normal, L);
-  if (HALFLAMBERT) {
+  if (false) {//HALFLAMBERT) {
     result = clamp(NdotL * 0.5 + 0.5, 0, 1);
 #if !LIGHTWARP
     result *= result;
@@ -254,38 +250,43 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
   float lightDist = 0.0;
   float lightAtten = 1.0;
 
+  float shadowFactor = 1.0;
+
+  float fNdotL;
+
   vec3 L;
   if (isDirectional) {
     L = lightDir;
+
+    fNdotL = max(0.0, dot(L, worldNormal));
+
+#if HAS_SHADOW_SUNLIGHT
+    GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, fNdotL, NUM_CASCADES);
+#endif
 
   } else {
     L = lightPos - worldPos;
     lightDist = max(0.00001, length(L));
     L = normalize(L);
 
-    lightAtten = 1.0 / (attenParams.x + attenParams.y * lightDist + attenParams.z * (lightDist * lightDist));
+    fNdotL = max(0.0, dot(L, worldNormal));
 
-    if (isSpot) {
-      // Spotlight cone attenuation.
-      float cosTheta = clamp(dot(L, -lightDir), 0, 1);
-      float spotAtten = (cosTheta - spotParams.z) * spotParams.w;
-      spotAtten = max(0.0001, spotAtten);
-      spotAtten = pow(spotAtten, spotParams.x);
-      spotAtten = clamp(spotAtten, 0, 1);
-      lightAtten *= spotAtten;
-    }
+    //if (fNdotL > 0.0) {
+      lightAtten = 1.0 / (attenParams.x + attenParams.y * lightDist + attenParams.z * (lightDist * lightDist));
+
+      if (isSpot) {
+        // Spotlight cone attenuation.
+        float cosTheta = clamp(dot(L, -lightDir), 0, 1);
+        float spotAtten = (cosTheta - spotParams.z) * spotParams.w;
+        spotAtten = max(0.0001, spotAtten);
+        spotAtten = pow(spotAtten, spotParams.x);
+        spotAtten = clamp(spotAtten, 0, 1);
+        lightAtten *= spotAtten;
+      }
+    //}
   }
 
-  float shadowFactor = 1.0;
-//#if HAS_SHADOW_SUNLIGHT
-//  if (isDirectional) {
-//    GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_pssmCoords, vec3(max(0.0, dot(L, worldNormal))),
-//                  p3d_CascadeMVPs, wspos_view.xyz, worldPos);
-//  }
-//#endif
-
-  vec3 NdotL = diffuseTerm(L, worldNormal, shadowFactor);
-  //lightAtten *= shadowFactor;
+  vec3 NdotL = diffuseTerm(fNdotL, shadowFactor);
 
   diffuseLighting += lightColor * lightAtten * NdotL;
 
