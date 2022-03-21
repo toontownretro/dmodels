@@ -19,6 +19,7 @@ in vec3 p3d_Binormal;
 in vec4 p3d_Color;
 in vec2 texcoord;
 in vec2 texcoord_lightmap;
+in float blend;
 
 out vec4 l_worldPos;
 out vec3 l_worldNormal;
@@ -29,6 +30,7 @@ out vec4 l_eyePos;
 out vec4 l_vertexColor;
 out vec2 l_texcoord;
 out vec2 l_texcoordLightmap;
+out float l_vertexBlend;
 
 #if SUNLIGHT
 // We only need the direction, but uniform has to match
@@ -65,6 +67,8 @@ main() {
   vec4 colorScale = p3d_ColorScale;
   colorScale.rgb = pow(colorScale.rgb, vec3(2.2));
   l_vertexColor = vertexColor * colorScale;
+
+  l_vertexBlend = blend / 255.0;
 
 #if SUNLIGHT
   ComputeSunShadowPositions(l_worldNormal, l_worldPos,

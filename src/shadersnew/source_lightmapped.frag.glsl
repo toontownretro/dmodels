@@ -7,6 +7,8 @@
 #pragma combo SUNLIGHT    0 1
 #pragma combo FOG         0 1
 #pragma combo ALPHA_TEST  0 1
+#pragma combo BASETEXTURE2 0 1
+#pragma combo BUMPMAP2     0 1
 
 #pragma skip $[and $[not $[ENVMAP]],$[ENVMAPMASK]]
 
@@ -16,11 +18,19 @@
 #include "shadersnew/common_shadows_frag.inc.glsl"
 
 uniform sampler2D baseTexture;
+#if BASETEXTURE2
+uniform sampler2D baseTexture2;
+#endif
 
+#if BUMPMAP || BUMPMAP2
 #if BUMPMAP
 uniform sampler2D normalTexture;
+#endif
+#if BUMPMAP2
+uniform sampler2D normalTexture2;
+#endif
 layout(constant_id = 0) const bool SSBUMP = false;
-#endif // BUMPMAP
+#endif // BUMPMAP || BUMPMAP2
 
 #if ENVMAP
 uniform samplerCube envmapTexture;
@@ -74,6 +84,7 @@ in vec3 l_worldNormal;
 in vec3 l_worldTangent;
 in vec3 l_worldBinormal;
 in vec3 l_worldVertexToEye;
+in float l_vertexBlend;
 
 out vec4 o_color;
 
@@ -113,7 +124,7 @@ bool normalAlphaIsEnvMapMask() {
 }
 
 bool hasSSBump() {
-#if !BUMPMAP
+#if !BUMPMAP && !BUMPMAP2
   return false;
 #else
   return SSBUMP;
@@ -124,6 +135,9 @@ void
 main() {
   float alpha = l_vertexColor.a;
   vec4 baseSample = texture(baseTexture, l_texcoord);
+#if BASETEXTURE2
+  baseSample = mix(baseSample, texture(baseTexture2, l_texcoord), vec4(l_vertexBlend));
+#endif
   if (!baseAlphaIsEnvMapMask() && !hasSelfIllum()) {
     alpha *= baseSample.a;
   }
@@ -147,6 +161,12 @@ main() {
 #else
   vec4 normalTexel = vec4(0.5, 0.5, 1.0, 1.0);
 #endif
+#if BUMPMAP2
+  vec4 normalTexel2 = texture(normalTexture2, l_texcoord);
+#else
+  vec4 normalTexel2 = vec4(0.5, 0.5, 1.0, 1.0);
+#endif
+  normalTexel = mix(normalTexel, normalTexel2, vec4(l_vertexBlend));
 
   vec3 tangentSpaceNormal;
   if (!hasSSBump()) {
