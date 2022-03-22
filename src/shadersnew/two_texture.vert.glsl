@@ -29,6 +29,14 @@ uniform mat4 baseTexture2Transform;
 uniform vec4 textureScroll;
 #define baseTextureScroll (textureScroll.xy)
 #define baseTexture2Scroll (textureScroll.zw)
+uniform vec3 sineXParams;
+#define sineXMin (sineXParams.x)
+#define sineXMax (sineXParams.y)
+#define sineXPeriod (sineXParams.z)
+uniform vec3 sineYParams;
+#define sineYMin (sineYParams.x)
+#define sineYMax (sineYParams.y)
+#define sineYPeriod (sineYParams.z)
 
 uniform vec4 p3d_ColorScale;
 in vec4 p3d_Color;
@@ -43,6 +51,13 @@ out vec4 l_eyePos;
 out vec4 l_worldPos;
 
 uniform float osg_FrameTime;
+
+const float PI = 3.14159265359;
+float doSine(in float period, in float smin, in float smax) {
+  float value = (sin(2.0 * PI * (osg_FrameTime - 0.0) / period) * 0.5) + 0.5;
+  value = (smax - smin) * value + smin;
+  return value;
+}
 
 void
 main() {
@@ -62,6 +77,9 @@ main() {
 
   l_texcoord = (baseTextureTransform * vec4(texcoord, 1, 1)).xy;
   l_texcoord += baseTextureScroll * osg_FrameTime;
+  l_texcoord.x += doSine(sineXPeriod, sineXMin, sineXMax);
+  l_texcoord.y += doSine(sineYPeriod, sineYMin, sineYMax);
+
   l_texcoord2 = (baseTexture2Transform * vec4(texcoord, 1, 1)).xy;
   l_texcoord2 += baseTexture2Scroll * osg_FrameTime;
 
