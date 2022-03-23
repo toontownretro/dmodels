@@ -435,7 +435,7 @@ main() {
              l_world_pos.xyz, worldVertToEyeDir, fSpecExp, fRimExp, fFresnelRanges, NUM_LIGHTS);
 
 #if PHONG
-#ifndef PHONGWARP
+#if !PHONGWARP
   specularLighting *= fFresnelRanges;
 #endif
   specularLighting *= specMask * phongBoost;
