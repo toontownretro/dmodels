@@ -4,6 +4,7 @@
 #pragma combo ALPHA_TEST 0 1
 #pragma combo FOG 0 1
 #pragma combo CLIPPING 0 1
+#pragma combo PLANAR_REFLECTION 0 1
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shadersnew/common_frag.inc.glsl"
@@ -46,6 +47,13 @@ uniform vec4 p3d_WorldClipPlane[4];
 layout(constant_id = 3) const int NUM_CLIP_PLANES = 0;
 #endif
 
+#if PLANAR_REFLECTION
+in vec4 l_texcoordReflection;
+uniform sampler2D reflectionSampler;
+in vec3 l_worldVertexToEye;
+in vec3 l_worldNormal;
+#endif
+
 /**
  *
  */
@@ -71,6 +79,21 @@ main() {
   if (!do_alpha_test(o_color.a, ALPHA_TEST_MODE, ALPHA_TEST_REF)) {
     discard;
   }
+#endif
+
+#if PLANAR_REFLECTION
+  // Sample planar reflection.
+  vec2 reflCoords = l_texcoordReflection.xy / l_texcoordReflection.w;
+  vec3 refl = texture(reflectionSampler, reflCoords).rgb;
+
+  // Basic fresnel modulation.
+  vec3 wnormal = normalize(l_worldNormal);
+  vec3 vertToEyeDir = normalize(l_worldVertexToEye);
+  float fresnel = clamp(1 - dot(wnormal, vertToEyeDir), 0, 1);
+  fresnel *= fresnel;
+
+  // Add onto final color.
+  o_color.rgb += refl * fresnel;
 #endif
 
 #if FOG

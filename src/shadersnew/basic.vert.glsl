@@ -2,6 +2,7 @@
 
 #pragma combo BASETEXTURE 0 1
 #pragma combo SKINNING 0 1
+#pragma combo PLANAR_REFLECTION 0 1
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shadersnew/common_vert.inc.glsl"
@@ -25,6 +26,18 @@ out vec2 l_texcoord;
 uniform mat4 p3d_TransformTable[120];
 in vec4 transform_weight;
 in uvec4 transform_index;
+#endif
+
+#if PLANAR_REFLECTION
+out vec4 l_texcoordReflection;
+const mat4 scale_mat = mat4(vec4(0.5, 0.0, 0.0, 0.0),
+                            vec4(0.0, 0.5, 0.0, 0.0),
+                            vec4(0.0, 0.0, 0.5, 0.0),
+                            vec4(0.5, 0.5, 0.5, 1.0));
+uniform vec3 wspos_view;
+out vec3 l_worldVertexToEye;
+out vec3 l_worldNormal;
+in vec3 p3d_Normal;
 #endif
 
 out vec4 l_vertex_color;
@@ -57,4 +70,10 @@ main() {
 
   l_eye_position = eye_pos;
   l_world_position = world_pos;
+
+#if PLANAR_REFLECTION
+  l_texcoordReflection = scale_mat * gl_Position;
+  l_worldVertexToEye = wspos_view - world_pos.xyz;
+  l_worldNormal = normalize(mat3(p3d_ModelMatrix) * p3d_Normal);
+#endif
 }
