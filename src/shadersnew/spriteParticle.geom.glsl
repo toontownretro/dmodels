@@ -1,6 +1,7 @@
 #version 330
 
-#pragma combo BLAH 0 1
+// 0 is point-eye, 1 is point-world
+#pragma combo BILLBOARD_MODE 0 1
 
 /**
  * PANDA 3D SOFTWARE
@@ -18,6 +19,9 @@
 // This shader takes in a point sprite and converts it to a quad for rendering
 // on the fly.
 
+layout(points) in;
+layout(triangle_strip, max_vertices = 4) out;
+
 vec2 corners[4] = vec2[](
   vec2(1, 1),
   vec2(-1, 1),
@@ -25,10 +29,10 @@ vec2 corners[4] = vec2[](
   vec2(-1, -1)
 );
 
-layout(points) in;
-layout(triangle_strip, max_vertices = 4) out;
-
 uniform mat4 p3d_ProjectionMatrix;
+#if BILLBOARD_MODE == 1
+uniform mat4 p3d_ViewMatrix;
+#endif
 uniform mat4 p3d_ViewMatrixInverse;
 uniform vec2 sprite_size;
 uniform mat4 p3d_TextureTransform[1];
@@ -69,10 +73,44 @@ main() {
   vec2 sprite_offset = vec2(sprite_size[0], sprite_size[1]);
   sprite_offset *= v_size[0];
 
+  vec3 eyeSpaceUpVector = vec3(0, 0, 1);
+  vec3 eyeSpaceRightVector = vec3(1, 0, 0);
+
+#if BILLBOARD_MODE == 1
+  // For point-world, the up vector is fixed relative to the world.
+  // Move world-space up into eye-space.
+  eyeSpaceUpVector = normalize((p3d_ViewMatrix * vec4(0, 0, 1, 0)).xyz);
+#endif
+
   float angle_rad = radians(v_rotate[0]);
+
+  vec2 anim_top_right = sprite_offset;
+  vec2 anim_top_left = vec2(-sprite_offset[0], sprite_offset[1]);
+  vec2 anim_bot_right = vec2(sprite_offset[0], -sprite_offset[1]);
+  vec2 anim_bot_left = -sprite_offset;
+
+  rotate_point(vec2(0), angle_rad, anim_top_right);
+  rotate_point(vec2(0), angle_rad, anim_top_left);
+  rotate_point(vec2(0), angle_rad, anim_bot_right);
+  rotate_point(vec2(0), angle_rad, anim_bot_left);
+
+  // Compute billboarded quad vertices.
+  vec3 offsets[4] = vec3[](
+    // Top right.
+    eyeSpaceRightVector * anim_top_right[0] + eyeSpaceUpVector * anim_top_right[1],
+    // Top left.
+    eyeSpaceRightVector * anim_top_left[0] + eyeSpaceUpVector * anim_top_left[1],
+    // Bottom right.
+    eyeSpaceRightVector * anim_bot_right[0] + eyeSpaceUpVector * anim_bot_right[1],
+    // Bottom left.
+    eyeSpaceRightVector * anim_bot_left[0] + eyeSpaceUpVector * anim_bot_left[1]
+  );
+
   for (int i = 0; i < 4; i++) {
+    // Rotate the offset around (0, 0, 0) for angle animation.
+
     vec4 eye_pos = gl_in[0].gl_Position;
-    eye_pos.xz -= sprite_offset * corners[i];
+    eye_pos.xyz -= offsets[i];
 
     // Apply angle animation.
     rotate_point(gl_in[0].gl_Position.xz, angle_rad, eye_pos.xz);
