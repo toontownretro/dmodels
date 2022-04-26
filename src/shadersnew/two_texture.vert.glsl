@@ -1,6 +1,6 @@
 #version 330
 
-#pragma combo SKINNING 0 1
+#pragma combo SKINNING 0 2
 #pragma combo LIGHTMAP 0 1
 
 #extension GL_GOOGLE_include_directive : enable
@@ -45,6 +45,10 @@ in vec4 p3d_Color;
 uniform mat4 p3d_TransformTable[120];
 in vec4 transform_weight;
 in uvec4 transform_index;
+#if SKINNING == 2
+in vec4 transform_weight2;
+in uvec4 transform_index2;
+#endif
 #endif
 
 out vec4 l_eyePos;
@@ -62,10 +66,14 @@ float doSine(in float period, in float smin, in float smax) {
 void
 main() {
   vec4 finalVertex = p3d_Vertex;
-#if SKINNING
+#if SKINNING == 1
   vec3 foo = vec3(0);
   do_skinning(p3d_Vertex, vec3(0), p3d_TransformTable, transform_weight,
               transform_index, false, finalVertex, foo);
+#elif SKINNING == 2
+  vec3 foo = vec3(0);
+  do_skinning8(p3d_Vertex, vec3(0), p3d_TransformTable, transform_weight, transform_weight2,
+               transform_index, transform_index2, false, finalVertex, foo);
 #endif // SKINNING
 
   vec4 worldPos = p3d_ModelMatrix * finalVertex;

@@ -1,6 +1,6 @@
 #version 330
 
-#pragma combo SKINNING 0 1
+#pragma combo SKINNING 0 2
 #pragma combo HAS_SHADOW_SUNLIGHT 0 1
 
 #extension GL_GOOGLE_include_directive : enable
@@ -45,6 +45,10 @@ in vec2 texcoord;
 #if SKINNING
 in vec4 transform_weight;
 in uvec4 transform_index;
+#if SKINNING == 2
+in vec4 transform_weight2;
+in uvec4 transform_index2;
+#endif
 #endif
 
 // Vertex shader outputs/pixel shader inputs.
@@ -63,9 +67,12 @@ void
 main() {
   vec4 animated_vertex = p3d_Vertex;
   vec3 animated_normal = p3d_Normal;
-#if SKINNING
+#if SKINNING == 1
   do_skinning(p3d_Vertex, p3d_Normal, p3d_TransformTable, transform_weight,
               transform_index, true, animated_vertex, animated_normal);
+#elif SKINNING == 2
+  do_skinning8(p3d_Vertex, p3d_Normal, p3d_TransformTable, transform_weight, transform_weight2,
+               transform_index, transform_index2, true, animated_vertex, animated_normal);
 #endif
 
   vec4 world_pos = p3d_ModelMatrix * animated_vertex;

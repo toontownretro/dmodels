@@ -1,7 +1,7 @@
 #version 330
 
 #pragma combo BASETEXTURE 0 1
-#pragma combo SKINNING 0 1
+#pragma combo SKINNING 0 2
 #pragma combo PLANAR_REFLECTION 0 1
 
 #extension GL_GOOGLE_include_directive : enable
@@ -26,6 +26,10 @@ out vec2 l_texcoord;
 uniform mat4 p3d_TransformTable[120];
 in vec4 transform_weight;
 in uvec4 transform_index;
+#if SKINNING == 2
+in vec4 transform_weight2;
+in uvec4 transform_index2;
+#endif
 #endif
 
 #if PLANAR_REFLECTION
@@ -51,7 +55,10 @@ void
 main() {
   vec4 final_vertex = vertex;
   vec3 final_normal = vec3(0);
-#if SKINNING
+#if SKINNING == 2
+  do_skinning8(vertex, vec3(0), p3d_TransformTable, transform_weight, transform_weight2,
+               transform_index, transform_index2, false, final_vertex, final_normal);
+#elif SKINNING == 1
   do_skinning(vertex, vec3(0), p3d_TransformTable, transform_weight,
               transform_index, false, final_vertex, final_normal);
 #endif

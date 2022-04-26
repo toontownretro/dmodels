@@ -4,7 +4,7 @@
 #version 330
 
 #pragma combo BASETEXTURE 0 1
-#pragma combo SKINNING 0 1
+#pragma combo SKINNING 0 2
 
 /**
  * @file depth.vert.glsl
@@ -36,15 +36,23 @@ uniform vec4 baseColor;
 uniform mat4 p3d_TransformTable[120];
 in vec4 transform_weight;
 in uvec4 transform_index;
+#if SKINNING == 2
+in vec4 transform_weight2;
+in uvec4 transform_index2;
+#endif
 #endif
 
 void main() {
   vec4 finalVertex = p3d_Vertex;
 
-#if SKINNING
+#if SKINNING == 1
   vec3 foo = vec3(0);
   do_skinning(p3d_Vertex, vec3(0), p3d_TransformTable, transform_weight, transform_index,
               false, finalVertex, foo);
+#elif SKINNING == 2
+  vec3 foo = vec3(0);
+  do_skinning8(p3d_Vertex, vec3(0), p3d_TransformTable, transform_weight, transform_weight2,
+               transform_index, transform_index2, false, finalVertex, foo);
 #endif
 
   vec4 worldPos = p3d_ModelMatrix * finalVertex;
