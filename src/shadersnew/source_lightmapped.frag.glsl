@@ -9,8 +9,10 @@
 #pragma combo ALPHA_TEST  0 1
 #pragma combo BASETEXTURE2 0 1
 #pragma combo BUMPMAP2     0 1
+#pragma combo PLANAR_REFLECTION 0 1
 
-#pragma skip $[and $[not $[ENVMAP]],$[ENVMAPMASK]]
+#pragma skip $[and $[or $[not $[ENVMAP],$[not $[PLANAR_REFLECTION]]]],$[ENVMAPMASK]]
+#pragma skip $[and $[PLANAR_REFLECTION],$[ENVMAP]]
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shadersnew/common_frag.inc.glsl"
@@ -34,6 +36,9 @@ layout(constant_id = 0) const bool SSBUMP = false;
 
 #if ENVMAP
 uniform samplerCube envmapTexture;
+#endif // ENVMAP
+
+#if ENVMAP || PLANAR_REFLECTION
 #if ENVMAPMASK
 uniform sampler2D envmapMaskTexture;
 #endif
@@ -42,7 +47,7 @@ uniform vec3 envmapContrast;
 uniform vec3 envmapSaturation;
 layout(constant_id = 1) const bool BASEALPHAENVMAPMASK = false;
 layout(constant_id = 2) const bool NORMALMAPALPHAENVMAPMASK = false;
-#endif // ENVMAP
+#endif // ENVMAP || PLANAR_REFLECTION
 
 #if SUNLIGHT
 uniform struct p3d_LightSourceParameters {
@@ -72,6 +77,11 @@ layout(constant_id = 6) const float ALPHA_TEST_REF = 0.0;
 #if SELFILLUM
 uniform vec3 selfIllumTint;
 #endif // SELFILLUM
+
+#if PLANAR_REFLECTION
+uniform vec4 l_texcoordReflection;
+uniform sampler2D reflectionSampler;
+#endif // PLANAR_REFLECTION
 
 uniform sampler2D lightmapTexture;
 
@@ -211,20 +221,34 @@ main() {
 
   vec3 specularLighting = vec3(0.0);
 
-#if ENVMAP
-  float specMask = 1.0;
+#if ENVMAP || PLANAR_REFLECTION
+  vec3 specMask = vec3(1.0);
   if (baseAlphaIsEnvMapMask()) {
     specMask *= 1.0 - baseSample.a;
   } else if (normalAlphaIsEnvMapMask()) {
     specMask *= normalTexel.a;
   }
+
 #if ENVMAPMASK
-  specMask *= texture(envmapMaskTexture, l_texcoord).x;
+  specMask *= texture(envmapMaskTexture, l_texcoord).rgb;
 #endif
 
-  vec3 reflectVec = 2 * worldNormal * dot(worldNormal, worldVertToEyeDir) - worldVertToEyeDir;
+  float nDotV = dot(worldNormal, worldVertToEyeDir);
 
-  specularLighting += texture(envmapTexture, reflectVec).rgb * specMask * envmapTint;
+  float fresnel = 1.0 - nDotV;
+  fresnel = pow(fresnel, 5.0);
+  specMask *= fresnel;
+  specMask *= envmapTint;
+
+#if ENVMAP
+  vec3 reflectVec = 2 * worldNormal * nDotV - worldVertToEyeDir;
+  specularLighting += texture(envmapTexture, reflectVec).rgb * specMask;
+
+#elif PLANAR_REFLECTION
+  // Sample planar reflection.
+  vec2 reflCoords = l_texcoordReflection.xy / l_texcoordReflection.w;
+  specularLighting += texture(reflectionSampler, reflCoords).rgb * specMask;
+#endif
 
 #endif // ENVMAP
 

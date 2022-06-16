@@ -1,6 +1,7 @@
 #version 330
 
 #pragma combo SUNLIGHT 0 1
+#pragma combo PLANAR_REFLECTION 0 1
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shadersnew/common_shadows_vert.inc.glsl"
@@ -44,6 +45,14 @@ out vec4 l_cascadeCoords[4];
 layout(constant_id = 0) const int NUM_CASCADES = 0;
 #endif // SUNLIGHT
 
+#if PLANAR_REFLECTION
+out vec4 l_texcoordReflection;
+const mat4 scale_mat = mat4(vec4(0.5, 0.0, 0.0, 0.0),
+                            vec4(0.0, 0.5, 0.0, 0.0),
+                            vec4(0.0, 0.0, 0.5, 0.0),
+                            vec4(0.5, 0.5, 0.5, 1.0));
+#endif
+
 void
 main() {
   vec4 worldPos = p3d_ModelMatrix * p3d_Vertex;
@@ -76,4 +85,8 @@ main() {
                             p3d_CascadeMVPs, l_cascadeCoords,
                             NUM_CASCADES);
 #endif // SUNLIGHT
+
+#if PLANAR_REFLECTION
+  l_texcoordReflection = scale_mat * gl_Position;
+#endif
 }
