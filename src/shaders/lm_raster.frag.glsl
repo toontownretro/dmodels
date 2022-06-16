@@ -18,6 +18,10 @@
 
 uniform sampler2D base_texture_sampler;
 uniform vec3 emission_color;
+uniform ivec2 first_triangle_transparency;
+uniform vec2 geom_uv_mins;
+uniform vec2 geom_uv_maxs;
+#define has_transparency (bool(first_triangle_transparency.y))
 
 in vec2 l_texcoord;
 in vec2 l_texcoord_lightmap;
@@ -44,6 +48,15 @@ main() {
     LightmapVertex v1 = get_lightmap_vertex(vertex_indices.x);
     LightmapVertex v2 = get_lightmap_vertex(vertex_indices.y);
     LightmapVertex v3 = get_lightmap_vertex(vertex_indices.z);
+
+    vec2 uv = l_texcoord_lightmap;
+    // Constrain samples to be within UV bounds of the triangle's geom's lightmap.
+    if (uv.x > geom_uv_maxs.x ||
+        uv.y > geom_uv_maxs.y ||
+        uv.x < geom_uv_mins.x ||
+        uv.y < geom_uv_mins.y) {
+      discard;
+    }
 
     vec3 pos_a = v1.position;
     vec3 pos_b = v2.position;
@@ -105,8 +118,15 @@ main() {
     unocclude_output.w = texel_size;
   }
 
-  albedo_output = texture(base_texture_sampler, l_texcoord);
-  position_output = vec4(vertex_pos, albedo_output.a);
+  vec4 albedo = textureLod(base_texture_sampler, l_texcoord, 0);
+
+  float alpha = 1.0;
+  if (has_transparency) {
+    alpha = albedo.a;
+  }
+
+  albedo_output = vec4(albedo.rgb, alpha);
+  position_output = vec4(vertex_pos, alpha);
   normal_output = vec4(normalize(l_world_normal), 1.0);
   emission_output = vec4(emission_color, 1.0);
 }

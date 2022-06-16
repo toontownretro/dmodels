@@ -21,9 +21,7 @@ layout(rgba32f) uniform restrict writeonly image2DArray dest_image;
 uniform ivec3 u_palette_size_page;
 #define u_palette_size (u_palette_size_page.xy)
 #define u_palette_page (u_palette_size_page.z)
-uniform ivec3 u_region_ofs_grid_size;
-#define u_region_ofs (u_region_ofs_grid_size.xy)
-#define u_grid_size (u_region_ofs_grid_size.z)
+uniform ivec2 u_region_ofs;
 
 void
 main() {
@@ -34,6 +32,7 @@ main() {
   }
 
   vec4 c = texelFetch(source_tex, ivec3(palette_pos, u_palette_page), 0);
+
 	//sides first, as they are closer
 	c = c.a > 0.5 ? c : texelFetch(source_tex, ivec3(palette_pos + ivec2(-1, 0), u_palette_page), 0);
 	c = c.a > 0.5 ? c : texelFetch(source_tex, ivec3(palette_pos + ivec2(0, 1), u_palette_page), 0);

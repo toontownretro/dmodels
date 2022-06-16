@@ -30,6 +30,9 @@
     lm_raster.frag.glsl lm_raster.vert.glsl \
     lm_probes.compute.glsl \
     lm_dilate.compute.glsl \
+    lm_vtx_direct.compute.glsl \
+    lm_vtx_indirect.compute.glsl \
+    lm_vtx_raster.vert.glsl lm_vtx_raster.frag.glsl \
     skybox.frag.glsl \
     skybox.vert.glsl \
     source_vlg.vert.glsl source_vlg.frag.glsl source_vlg_orig.frag.glsl \

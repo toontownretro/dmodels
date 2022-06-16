@@ -8,71 +8,58 @@
  * license.  You should have received a copy of this license along
  * with this source code in a file named "LICENSE."
  *
- * @file lm_indirect.compute.glsl
+ * @file lm_vtx_indirect.compute.glsl
  * @author lachbr
- * @date 2021-09-26
+ * @date 2022-06-08
  */
 
-// Compute shader for gathering indirect lighting for a luxel.
+// Compute shader for gathering indirect lighting for a vertex.
 
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 // Luxel reflectivity.  On bounce 0, contains direct light * albedo + emission.
 // Subsequent bounces contain gathered light from previous bounce.
 uniform sampler2DArray luxel_reflectivity;
-// Gathered light.
-layout(rgba32f) uniform writeonly image2DArray luxel_gathered;
-// Contains just direct light at start, gathered added onto this.
-layout(rgba32f) uniform image2DArray luxel_light;
-layout(rgba32f) uniform image1D bounce_total;
-
 uniform sampler2DArray luxel_albedo;
-uniform sampler2DArray luxel_normal;
-uniform sampler2DArray luxel_position;
 
 // Also reflect light off of vertex-lit geometry.
 uniform sampler2D vtx_reflectivity;
-// X: LightmapVertex index of first vertex-lit vertex.
-// Y: Width of the vertex palette.
-uniform uvec2 u_vtx_lit_info;
+layout(rgba32f) uniform writeonly image2D vtx_gathered;
 
-uniform ivec4 u_palette_size_page_bounce;
-#define u_palette_size (u_palette_size_page_bounce.xy)
-#define u_palette_page (u_palette_size_page_bounce.z)
-#define u_bounce (u_palette_size_page_bounce.w)
-uniform ivec2 u_region_ofs;
-uniform vec2 u_bias_;
-#define u_bias (u_bias_.x)
-
-uniform ivec3 u_ray_params;
-#define u_ray_from (u_ray_params.x)
-#define u_ray_to (u_ray_params.y)
-#define u_ray_count (u_ray_params.z)
+uniform ivec4 u_vtx_palette_size_first_vtx_num_verts;
+#define u_vtx_palette_size (u_vtx_palette_size_first_vtx_num_verts.xy)
+#define u_first_vtx (u_vtx_palette_size_first_vtx_num_verts.z)
+#define u_num_verts (u_vtx_palette_size_first_vtx_num_verts.w)
+uniform ivec2 u_ray_count_bounce;
+#define u_ray_count (u_ray_count_bounce.x)
+#define u_bounce (u_ray_count_bounce.y)
+uniform vec2 _u_bias;
+#define u_bias (_u_bias.x)
 
 uniform vec3 u_sky_color;
 
 void
 main() {
-  ivec2 palette_pos = ivec2(gl_GlobalInvocationID.xy) + u_region_ofs;
-  if (any(greaterThanEqual(palette_pos, u_palette_size))) {
-    // Too large, do nothing.
+  ivec2 palette_pos = ivec2(gl_GlobalInvocationID.xy);
+  if (any(greaterThanEqual(palette_pos, u_vtx_palette_size))) {
     return;
   }
 
-  //memoryBarrier();
+  int vtx_index = palette_pos.y * u_vtx_palette_size.x;
+  vtx_index += palette_pos.x;
 
-  ivec3 palette_coord = ivec3(palette_pos, u_palette_page);
-
-  vec3 normal = texelFetch(luxel_normal, palette_coord, 0).xyz;
-  if (length(normal) < 0.5) {
+  if (vtx_index >= u_num_verts) {
     return;
   }
-  normal = normalize(normal);
 
-  vec3 position = texelFetch(luxel_position, palette_coord, 0).xyz;
+  LightmapVertex this_vert;
+  get_lightmap_vertex(vtx_index + u_first_vtx, this_vert);
+
+  vec3 position = this_vert.position;
+  vec3 normal = normalize(this_vert.normal);
 
   vec3 x;
   bool is_z = false;
@@ -94,8 +81,8 @@ main() {
 
   vec3 gathered = vec3(0);
   float active_rays = 0.0;
-  uint noise = random_seed(ivec3(u_ray_from, palette_pos));
-  for (uint i = u_ray_from; i < u_ray_to; i++) {
+  uint noise = random_seed(ivec3(0, palette_pos));
+  for (uint i = 0; i < uint(u_ray_count); i++) {
     vec3 ray_dir = normal_mat * generate_hemisphere_cosine_weighted_direction(noise);
 
     vec3 barycentric;
@@ -104,11 +91,10 @@ main() {
     uint trace_result = ray_cast(position + normal * u_bias,
                                  position + ray_dir * 9999999,
                                  u_bias,
-                                 barycentric, tri, vert0, vert1, vert2, luxel_albedo,
-                                 false);
+                                 barycentric, tri, vert0, vert1, vert2,
+                                 luxel_albedo, false);
 
     if (trace_result == RAY_FRONT) {
-
       // Hit a triangle.
 
       if ((tri.flags & TRIFLAGS_SKY) != 0) {
@@ -134,16 +120,16 @@ main() {
         // and interpolate with barycentric coordinates.
         ivec2 coords;
 
-        coords.y = int((tri.indices.x - u_vtx_lit_info.x) / u_vtx_lit_info.y);
-        coords.x = int((tri.indices.x - u_vtx_lit_info.x) % u_vtx_lit_info.y);
+        coords.y = int((tri.indices.x - u_first_vtx) / u_vtx_palette_size.x);
+        coords.x = int((tri.indices.x - u_first_vtx) % u_vtx_palette_size.x);
         vec3 refl0 = texelFetch(vtx_reflectivity, coords, 0).rgb;
 
-        coords.y = int((tri.indices.y - u_vtx_lit_info.x) / u_vtx_lit_info.y);
-        coords.x = int((tri.indices.y - u_vtx_lit_info.x) % u_vtx_lit_info.y);
+        coords.y = int((tri.indices.y - u_first_vtx) / u_vtx_palette_size.x);
+        coords.x = int((tri.indices.y - u_first_vtx) % u_vtx_palette_size.x);
         vec3 refl1 = texelFetch(vtx_reflectivity, coords, 0).rgb;
 
-        coords.y = int((tri.indices.z - u_vtx_lit_info.x) / u_vtx_lit_info.y);
-        coords.x = int((tri.indices.z - u_vtx_lit_info.x) % u_vtx_lit_info.y);
+        coords.y = int((tri.indices.z - u_first_vtx) / u_vtx_palette_size.x);
+        coords.x = int((tri.indices.z - u_first_vtx) % u_vtx_palette_size.x);
         vec3 refl2 = texelFetch(vtx_reflectivity, coords, 0).rgb;
 
         light = refl0 * barycentric.x + refl1 * barycentric.y + refl2 * barycentric.z;
@@ -159,9 +145,5 @@ main() {
   }
 
   // Store light gathered from this bounce, will be reflected in next bounce.
-  imageStore(luxel_gathered, palette_coord, vec4(gathered, 1.0));
-
-  // Accumulate onto total light.
-  vec3 curr_light_total = imageLoad(luxel_light, palette_coord).rgb;
-  imageStore(luxel_light, palette_coord, vec4(curr_light_total + gathered, 1.0));
+  imageStore(vtx_gathered, palette_pos, vec4(gathered, 1.0));
 }

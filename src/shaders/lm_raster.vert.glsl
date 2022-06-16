@@ -23,7 +23,8 @@ in vec2 texcoord; // Base texture coordinate.
 
 uniform vec4 p3d_ColorScale;
 
-uniform ivec2 first_triangle;
+uniform ivec2 first_triangle_transparency;
+#define first_triangle (first_triangle_transparency.x)
 
 out vec2 l_texcoord;
 out vec3 l_world_normal;
@@ -33,8 +34,6 @@ out vec3 l_barycentric;
 out vec4 l_color;
 flat out uvec3 vertex_indices;
 flat out vec3 face_normal;
-
-uniform vec2 u_uv_offset;
 
 void
 main() {
@@ -64,7 +63,6 @@ main() {
   l_world_position = tri_verts[triangle_local_idx].position;
   l_world_normal = tri_verts[triangle_local_idx].normal;
   l_texcoord_lightmap = tri_verts[triangle_local_idx].uv;
-  l_texcoord_lightmap += u_uv_offset;
   l_texcoord_lightmap = clamp(l_texcoord_lightmap, 0, 1);
   l_texcoord = texcoord;
 
@@ -73,7 +71,7 @@ main() {
           tri_verts[2].position - tri_verts[0].position));
 
   // Output the lightmap coordinate as the clip-space position for the vertex.
-  gl_Position = vec4(l_texcoord_lightmap * 2.0 - 1.0, 0.0001, 1);
+  gl_Position = vec4(l_texcoord_lightmap * 2.0 - 1.0, 0.0, 1);
 
   vec4 v_color = p3d_Color;
   vec4 color_scale = p3d_ColorScale;

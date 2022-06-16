@@ -33,93 +33,10 @@ uniform sampler2DArray luxel_emission;
 uniform ivec3 u_palette_size_page;
 #define u_palette_size (u_palette_size_page.xy)
 #define u_palette_page (u_palette_size_page.z)
-uniform ivec3 u_region_ofs_grid_size;
-#define u_region_ofs (u_region_ofs_grid_size.xy)
-#define u_grid_size (u_region_ofs_grid_size.z)
+uniform ivec2 u_region_ofs;
 uniform vec2 u_bias_sun_extent;
 #define u_bias (u_bias_sun_extent.x)
 #define u_sun_extent (u_bias_sun_extent.y)
-uniform vec3 u_to_cell_offset;
-uniform vec3 u_to_cell_size;
-
-uint
-trace_ray(vec3 p_from, vec3 p_to, out float o_distance, out vec3 o_bary) {
-  vec3 rel = p_to - p_from;
-  float rel_len = length(rel);
-  vec3 dir = normalize(rel);
-  vec3 inv_dir = 1.0 / dir;
-
-  vec3 from_cell = (p_from - u_to_cell_offset) * u_to_cell_size;
-  vec3 to_cell = (p_to - u_to_cell_offset) * u_to_cell_size;
-
-  vec3 rel_cell = to_cell - from_cell;
-  ivec3 icell = ivec3(from_cell);
-  ivec3 iendcell = ivec3(to_cell);
-  vec3 dir_cell = normalize(rel_cell);
-  vec3 delta = min(abs(1.0 / dir_cell), u_grid_size);
-  ivec3 step = ivec3(sign(rel_cell));
-  vec3 side = (sign(rel_cell) * (vec3(icell) - from_cell) + (sign(rel_cell) * 0.5) + 0.5) * delta;
-
-  uint iters = 0;
-  while (all(greaterThanEqual(icell, ivec3(0))) && all(lessThan(icell, ivec3(u_grid_size))) && iters < 1000) {
-    uvec2 cell_data = texelFetch(grid, icell, 0).xy;
-    if (cell_data.x > 0) { // Triangle here.
-      uint hit = RAY_MISS;
-      float best_distance = 1e20;
-
-      for (uint i = 0; i < cell_data.x; i++) {
-        uint tidx = get_tri_for_cell(int(cell_data.y + i));
-
-        // Ray-box test
-        LightmapTri triangle = get_lightmap_tri(tidx);
-        vec3 t0 = (triangle.mins - p_from) * inv_dir;
-        vec3 t1 = (triangle.maxs - p_from) * inv_dir;
-        vec3 tmin = min(t0, t1), tmax = max(t0, t1);
-
-        if (max(tmin.x, max(tmin.y, tmin.z)) > min(tmax.x, min(tmax.y, tmax.z))) {
-          // Ray-box failed.
-          continue;
-        }
-
-        // Prepare triangle vertices.
-        LightmapVertex vert0 = get_lightmap_vertex(triangle.indices.x);
-        LightmapVertex vert1 = get_lightmap_vertex(triangle.indices.y);
-        LightmapVertex vert2 = get_lightmap_vertex(triangle.indices.z);
-
-        vec3 vtx0 = vert0.position;
-        vec3 vtx1 = vert1.position;
-        vec3 vtx2 = vert2.position;
-
-        float distance;
-        vec3 barycentric;
-
-        if (ray_hits_triangle(p_from, dir, rel_len, u_bias, vtx0, vtx1, vtx2, distance, barycentric)) {
-          // Check alpha value at uv coordinate.
-          vec3 uvw = vec3(barycentric.x * vert0.uv + barycentric.y * vert1.uv + barycentric.z * vert2.uv, float(triangle.page));
-          float alpha = textureLod(luxel_albedo, uvw, 0.0).a;
-          // Accept hit if alpha is >= 0.5 so we can do alpha texture shadows.
-          if (alpha >= 0.5) {
-            o_distance = distance;
-            o_bary = barycentric;
-            return RAY_CROSS;
-          }
-        }
-      }
-    }
-
-    if (icell == iendcell) {
-      break;
-    }
-
-    bvec3 mask = lessThanEqual(side.xyz, min(side.yzx, side.zxy));
-    side += vec3(mask) * delta;
-    icell += ivec3(vec3(mask)) * step;
-
-    iters++;
-  }
-
-  return RAY_MISS;
-}
 
 const int SUN_AREA_LIGHT_SAMPLES = 30;
 // These values are needed to get the same results as VRAD for sun soft
@@ -161,6 +78,9 @@ main() {
     vec4(0.0, 0.0, 0.0, 1.0),
     vec4(0.0, 0.0, 0.0, 1.0)
   );
+
+  LightmapTri tri;
+  LightmapVertex vert0, vert1, vert2;
 
   uint light_count = uint(get_num_lightmap_lights());
   for (uint i = 0; i < light_count; i++) {
@@ -204,10 +124,21 @@ main() {
     //  continue;
     //}
 
-    float hit_dist;
     vec3 bary;
 
-    vec3 start = position + (L * u_bias);
+    uint ret = ray_cast(position + (normal * u_bias), light_pos, u_bias, bary,
+                          tri, vert0, vert1, vert2, luxel_albedo, false);
+
+    if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
+      if (ret == RAY_FRONT && (tri.flags & TRIFLAGS_SKY) != 0) {
+        // Hit sky, sun light is visible.
+        ret = RAY_MISS;
+
+      } else {
+        // If ray hit nothing or hit a non-sky triangle, sky is not visible.
+        ret = RAY_FRONT;
+      }
+    }
 
     /*if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
       // Special case for sun light to implement soft shadows.
@@ -235,7 +166,7 @@ main() {
 
       static_light += fraction_visible * attenuation * light.color.rgb;
 
-    } else*/ if (trace_ray(start, light_pos, hit_dist, bary) == RAY_MISS) {
+    } else*/ if (ret == RAY_MISS) {
       if (light.bake_direct == 1) {
         static_light += attenuation * light.color.rgb;
 
