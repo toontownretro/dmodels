@@ -15,6 +15,8 @@
 
 // Shader for computing ambient light probes.
 
+#define TRACE_MODE_PROBES 1
+
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 
