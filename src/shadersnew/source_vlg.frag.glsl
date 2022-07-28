@@ -14,6 +14,7 @@
 #pragma combo FOG             0 1
 #pragma combo ALPHA_TEST      0 1
 #pragma combo HAS_SHADOW_SUNLIGHT 0 1
+#pragma combo CLIPPING        0 1
 
 // All of these are dependent on direct lighting.
 #pragma skip $[and $[not $[DIRECT_LIGHT]],$[or $[PHONGWARP],$[LIGHTWARP],$[HAS_SHADOW_SUNLIGHT]]]
@@ -37,6 +38,7 @@ in vec3 l_world_vertex_to_eye;
 in vec4 l_vertex_color;
 in vec4 l_eye_pos;
 in vec2 l_texcoord;
+in vec3 l_vertex_light;
 
 #if DIRECT_LIGHT
 #define MAX_LIGHTS 4
@@ -130,6 +132,14 @@ uniform sampler2D normalTexture;
 uniform sampler1D lightWarpTexture;
 #endif
 
+// Clip planes.
+#if CLIPPING
+uniform vec4 p3d_WorldClipPlane[4];
+layout(constant_id = 10) const int NUM_CLIP_PLANES = 0;
+#endif
+
+layout(constant_id = 11) const bool BAKED_VERTEX_LIGHT = false;
+
 out vec4 o_color;
 
 float Fresnel(vec3 vNormal, vec3 vEyeDir)
@@ -179,11 +189,17 @@ ambientLookup(vec3 wnormal) {
 #elif AMBIENT_LIGHT == 1
   return p3d_LightModel.ambient.rgb;
 
-#elif DIRECT_LIGHT
-  return vec3(0.0);
-
 #else
-  return vec3(1.0);
+  if (BAKED_VERTEX_LIGHT) {
+    return l_vertex_light;
+  } else {
+#if DIRECT_LIGHT
+    return vec3(0.0);
+#else
+    return vec3(1.0);
+#endif
+  }
+
 #endif
 }
 
@@ -347,6 +363,15 @@ bool hasNormalMapAlphaEnvMapMask() {
 
 void
 main() {
+#if CLIPPING
+  int clip_plane_count = min(4, NUM_CLIP_PLANES);
+  for (int i = 0; i < clip_plane_count; ++i) {
+    if (dot(p3d_WorldClipPlane[i], l_world_pos) < 0.0) {
+      discard;
+    }
+  }
+#endif
+
   // Determine whether the basetexture alpha is actually alpha,
   // or used as a mask for something else.
   bool baseAlphaIsAlpha = !(hasBaseAlphaSelfIllumMask() || hasBaseMapAlphaEnvMapMask() || hasBaseMapAlphaPhongMask());
@@ -398,6 +423,8 @@ main() {
   vec3 rimAmbientColor = ambientLookup(worldVertToEyeDir);
 
   vec3 diffuseLighting = ambientLookup(worldNormal);
+  //o_color = vec4(diffuseLighting, alpha);
+  //return;
   vec3 specularLighting = vec3(0.0);
   vec3 rimLighting = vec3(0.0);
   vec3 specularTint = vec3(0.0);

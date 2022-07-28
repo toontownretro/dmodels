@@ -42,6 +42,7 @@ in vec4 p3d_Color;
 in vec3 p3d_Tangent;
 in vec3 p3d_Binormal;
 in vec2 texcoord;
+in vec3 vertex_lighting;
 #if SKINNING
 in vec4 transform_weight;
 in uvec4 transform_index;
@@ -62,6 +63,9 @@ out vec3 l_world_vertex_to_eye;
 out vec4 l_vertex_color;
 out vec4 l_eye_pos;
 out vec2 l_texcoord;
+out vec3 l_vertex_light;
+
+layout(constant_id = 2) const bool BAKED_VERTEX_LIGHT = false;
 
 void
 main() {
@@ -87,8 +91,14 @@ main() {
   l_world_pos = world_pos;
   l_world_vertex_to_eye = wspos_view - world_pos.xyz;
   l_world_normal = normalize((p3d_ModelMatrix * vec4(animated_normal, 0.0)).xyz);
-  l_world_tangent = normalize(mat3(p3d_ModelMatrix) * p3d_Tangent);
-  l_world_binormal = normalize(mat3(p3d_ModelMatrix) * p3d_Binormal);
+  l_world_tangent = normalize((p3d_ModelMatrix * vec4(p3d_Tangent, 0.0)).xyz);
+  l_world_binormal = normalize((p3d_ModelMatrix * vec4(-p3d_Binormal, 0.0)).xyz);
+
+  if (BAKED_VERTEX_LIGHT) {
+    l_vertex_light = vertex_lighting;
+  } else {
+    l_vertex_light = vec3(1.0);
+  }
 
   vec4 vertex_color = p3d_Color;
   vertex_color.rgb = pow(vertex_color.rgb, vec3(2.2));

@@ -59,12 +59,10 @@ main() {
   vec4 eyePos = p3d_ViewMatrix * worldPos;
   gl_Position = p3d_ProjectionMatrix * eyePos;
 
-  mat3 modelMatrixUpper3 = mat3(p3d_ModelMatrix);
-
   l_worldPos = worldPos;
-  l_worldNormal = normalize(modelMatrixUpper3 * p3d_Normal);
-  l_worldTangent = normalize(modelMatrixUpper3 * p3d_Tangent);
-  l_worldBinormal = normalize(modelMatrixUpper3 * p3d_Binormal);
+  l_worldNormal = normalize((p3d_ModelMatrix * vec4(p3d_Normal, 0.0)).xyz);
+  l_worldTangent = normalize((p3d_ModelMatrix * vec4(p3d_Tangent, 0.0)).xyz);
+  l_worldBinormal = normalize((p3d_ModelMatrix * vec4(-p3d_Binormal, 0.0)).xyz);
   l_worldVertexToEye = wspos_view - worldPos.xyz;
   l_eyePos = eyePos;
 

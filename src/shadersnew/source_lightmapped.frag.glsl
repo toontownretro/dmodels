@@ -10,6 +10,7 @@
 #pragma combo BASETEXTURE2 0 1
 #pragma combo BUMPMAP2     0 1
 #pragma combo PLANAR_REFLECTION 0 1
+#pragma combo CLIPPING    0 1
 
 #pragma skip $[and $[or $[not $[ENVMAP],$[not $[PLANAR_REFLECTION]]]],$[ENVMAPMASK]]
 #pragma skip $[and $[PLANAR_REFLECTION],$[ENVMAP]]
@@ -79,11 +80,17 @@ uniform vec3 selfIllumTint;
 #endif // SELFILLUM
 
 #if PLANAR_REFLECTION
-uniform vec4 l_texcoordReflection;
+in vec4 l_texcoordReflection;
 uniform sampler2D reflectionSampler;
 #endif // PLANAR_REFLECTION
 
-uniform sampler2D lightmapTexture;
+// Clip planes.
+#if CLIPPING
+uniform vec4 p3d_WorldClipPlane[4];
+layout(constant_id = 7) const int NUM_CLIP_PLANES = 0;
+#endif
+
+uniform sampler2DArray lightmapTexture;
 
 in vec2 l_texcoord;
 in vec2 l_texcoordLightmap;
@@ -141,8 +148,36 @@ bool hasSSBump() {
 #endif
 }
 
+#define lumaConv vec3(0.2125, 0.7154, 0.0721)
+
+float
+shEvaluateDiffuseL1Geomerics(float L0, vec3 L1, vec3 n) {
+  float R0 = L0;
+
+  vec3 R1 = 0.5 * L1;
+
+  float lenR1 = length(R1);
+
+  float q = dot(normalize(R1), n) * 0.5 + 0.5;
+
+  float p = 1.0 + 2.0 * lenR1 / R0;
+
+  float a = (1.0 - lenR1 / R0) / (1.0 + lenR1 / R0);
+
+  return R0 * (a + (1.0 - a) * (p + 1.0) * pow(q, p));
+}
+
 void
 main() {
+#if CLIPPING
+  int clip_plane_count = min(4, NUM_CLIP_PLANES);
+  for (int i = 0; i < clip_plane_count; ++i) {
+    if (dot(p3d_WorldClipPlane[i], l_worldPos) < 0.0) {
+      discard;
+    }
+  }
+#endif
+
   float alpha = l_vertexColor.a;
   vec4 baseSample = texture(baseTexture, l_texcoord);
 #if BASETEXTURE2
@@ -177,18 +212,50 @@ main() {
   vec4 normalTexel2 = vec4(0.5, 0.5, 1.0, 1.0);
 #endif
   normalTexel = mix(normalTexel, normalTexel2, vec4(l_vertexBlend));
+  //normalTexel = mix(vec4(0.5, 0.5, 1.0, 1.0), normalTexel, 5.0);
+  //normalTexel.g = 1.0 - normalTexel.g;
 
-  vec3 tangentSpaceNormal;
+  vec3 tangentSpaceNormalUnnormalized;
   if (!hasSSBump()) {
-    tangentSpaceNormal = normalize(2.0 * normalTexel.xyz - 1.0);
+    tangentSpaceNormalUnnormalized = 2.0 * normalTexel.xyz - 1.0;
   } else {
-    tangentSpaceNormal = normalize(g_localBumpBasis[0] * normalTexel.x +
+    tangentSpaceNormalUnnormalized = g_localBumpBasis[0] * normalTexel.x +
                                    g_localBumpBasis[1] * normalTexel.y +
-                                   g_localBumpBasis[2] * normalTexel.z);
+                                   g_localBumpBasis[2] * normalTexel.z;
   }
-  vec3 worldNormal = normalize(worldTangent * tangentSpaceNormal.x + worldBinormal * tangentSpaceNormal.y + origWorldNormal * tangentSpaceNormal.z);
+  vec3 tangentSpaceNormal = normalize(tangentSpaceNormalUnnormalized);
+  vec3 worldNormalUnnormalized = worldTangent * tangentSpaceNormalUnnormalized.y +
+    worldBinormal * tangentSpaceNormalUnnormalized.x +
+    origWorldNormal * tangentSpaceNormalUnnormalized.z;
+  vec3 worldNormal = normalize(worldTangent * tangentSpaceNormal.y +
+                               worldBinormal * tangentSpaceNormal.x +
+                               origWorldNormal * tangentSpaceNormal.z);
+  //o_color = vec4(worldNormal * 0.5 + 0.5, alpha);
+  //return;
 
-  vec3 diffuseLighting = textureBicubic(lightmapTexture, l_texcoordLightmap).rgb;
+  // Sample SH lightmap.
+
+#if 1
+  vec3 L0 = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 0)).rgb;
+  vec3 L1y = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 1)).rgb;
+  vec3 L1z = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 2)).rgb;
+  vec3 L1x = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 3)).rgb;
+  vec3 diffuseLighting;
+  if (hasSSBump()) {
+    diffuseLighting = L0 +
+      L1x * worldNormalUnnormalized.x +
+      L1y * worldNormalUnnormalized.y +
+      L1z * worldNormalUnnormalized.z;
+  } else {
+    diffuseLighting = L0 + L1x * worldNormal.x + L1y * worldNormal.y + L1z * worldNormal.z;
+  }
+
+  //o_color = vec4(diffuseLighting, alpha);
+  //return;
+
+#else
+  vec3 diffuseLighting = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 0)).rgb;
+#endif
 
 #if SUNLIGHT
   float NdotL;
@@ -246,7 +313,7 @@ main() {
 
 #elif PLANAR_REFLECTION
   // Sample planar reflection.
-  vec2 reflCoords = l_texcoordReflection.xy / l_texcoordReflection.w;
+  vec2 reflCoords = (l_texcoordReflection.xy + tangentSpaceNormal.xy) / l_texcoordReflection.w;
   specularLighting += texture(reflectionSampler, reflCoords).rgb * specMask;
 #endif
 

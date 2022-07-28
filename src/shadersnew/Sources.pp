@@ -9,6 +9,7 @@
     source_lightmapped.vert.glsl source_lightmapped.frag.glsl \
     source_sky.vert.glsl source_sky.frag.glsl \
     source_vlg.vert.glsl source_vlg.frag.glsl \
+    source_water.vert.glsl source_water.frag.glsl \
     spriteParticle.vert.glsl spriteParticle.geom.glsl spriteParticle.frag.glsl \
     two_texture.vert.glsl two_texture.frag.glsl
 
