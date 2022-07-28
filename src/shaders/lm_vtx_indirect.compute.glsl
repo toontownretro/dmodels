@@ -15,6 +15,8 @@
 
 // Compute shader for gathering indirect lighting for a vertex.
 
+#define TRACE_IGNORE_BACKFACE 1
+
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 
@@ -28,6 +30,7 @@ uniform sampler2DArray luxel_albedo;
 // Also reflect light off of vertex-lit geometry.
 uniform sampler2D vtx_reflectivity;
 layout(rgba32f) uniform writeonly image2D vtx_gathered;
+layout(rgba32f) uniform image2D vtx_light;
 
 uniform ivec4 u_vtx_palette_size_first_vtx_num_verts;
 #define u_vtx_palette_size (u_vtx_palette_size_first_vtx_num_verts.xy)
@@ -92,7 +95,7 @@ main() {
                                  position + ray_dir * 9999999,
                                  u_bias,
                                  barycentric, tri, vert0, vert1, vert2,
-                                 luxel_albedo, false);
+                                 luxel_albedo);
 
     if (trace_result == RAY_FRONT) {
       // Hit a triangle.
@@ -146,4 +149,9 @@ main() {
 
   // Store light gathered from this bounce, will be reflected in next bounce.
   imageStore(vtx_gathered, palette_pos, vec4(gathered, 1.0));
+
+  // Add onto total light.
+  vec4 total_light = imageLoad(vtx_light, palette_pos);
+  total_light.rgb += gathered;
+  imageStore(vtx_light, palette_pos, total_light);
 }

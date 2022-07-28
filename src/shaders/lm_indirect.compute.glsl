@@ -54,6 +54,8 @@ uniform ivec3 u_ray_params;
 
 uniform vec3 u_sky_color;
 
+#define PI 3.141592653589793
+
 void
 main() {
   ivec2 palette_pos = ivec2(gl_GlobalInvocationID.xy) + u_region_ofs;
@@ -92,11 +94,26 @@ main() {
   LightmapTri tri;
   LightmapVertex vert0, vert1, vert2;
 
+  vec4 sh_accum[4] = vec4[](
+    vec4(0.0, 0.0, 0.0, 1.0),
+    vec4(0.0, 0.0, 0.0, 1.0),
+    vec4(0.0, 0.0, 0.0, 1.0),
+    vec4(0.0, 0.0, 0.0, 1.0));
+
   vec3 gathered = vec3(0);
   float active_rays = 0.0;
+  //float total_dot = 0.0;
   uint noise = random_seed(ivec3(u_ray_from, palette_pos));
   for (uint i = u_ray_from; i < u_ray_to; i++) {
     vec3 ray_dir = normal_mat * generate_hemisphere_cosine_weighted_direction(noise);
+    ray_dir = normalize(ray_dir);
+
+    float dt = dot(normal, ray_dir);
+    if (dt <= 0.001) {
+      continue;
+    }
+
+    //total_dot += dt;
 
     vec3 barycentric;
 
@@ -104,8 +121,7 @@ main() {
     uint trace_result = ray_cast(position + normal * u_bias,
                                  position + ray_dir * 9999999,
                                  u_bias,
-                                 barycentric, tri, vert0, vert1, vert2, luxel_albedo,
-                                 false);
+                                 barycentric, tri, vert0, vert1, vert2, luxel_albedo);
 
     if (trace_result == RAY_FRONT) {
 
@@ -152,16 +168,47 @@ main() {
     }
 
     gathered += light;
+
+    float c[4] = float[](
+      0.282095, //l0
+      0.488603 * ray_dir.y, //l1n1
+      0.488603 * ray_dir.z, //l1n0
+      0.488603 * ray_dir.x //l1p1
+    );
+    for (uint j = 0; j < 4; ++j) {
+      sh_accum[j].rgb += light * c[j];
+    }
   }
 
   if (active_rays > 0) {
     gathered /= active_rays;
+
+    for (uint j = 0; j < 4; ++j) {
+      sh_accum[j].rgb /= active_rays;
+    }
   }
 
   // Store light gathered from this bounce, will be reflected in next bounce.
   imageStore(luxel_gathered, palette_coord, vec4(gathered, 1.0));
 
+#if 1
   // Accumulate onto total light.
-  vec3 curr_light_total = imageLoad(luxel_light, palette_coord).rgb;
-  imageStore(luxel_light, palette_coord, vec4(curr_light_total + gathered, 1.0));
+  for (int i = 0; i < 4; ++i) {
+    vec3 curr_light_total;
+    //if (u_bounce == 0) {
+    //  curr_light_total = vec3(0.0);
+    //} else {
+      curr_light_total = imageLoad(luxel_light, ivec3(palette_pos, u_palette_page * 4 + i)).rgb;
+    //}
+    imageStore(luxel_light, ivec3(palette_pos, u_palette_page * 4 + i), vec4(curr_light_total + sh_accum[i].rgb, 1.0));
+  }
+#else
+  vec3 curr_light_total;
+  //if (u_bounce == 0) {
+  //  curr_light_total = vec3(0.0);
+  //} else {
+    curr_light_total = imageLoad(luxel_light, ivec3(palette_pos, u_palette_page * 4)).rgb;
+  //}
+  imageStore(luxel_light, ivec3(palette_pos, u_palette_page * 4), vec4(curr_light_total + gathered, 1.0));
+#endif
 }

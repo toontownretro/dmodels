@@ -17,6 +17,8 @@
 // Outputs direct lighting that hits a luxel as well as the light that
 // should reflect off the surface during the indirect pass.
 
+#define TRACE_MODE_DIRECT 1
+
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 
@@ -93,7 +95,7 @@ main() {
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
       attenuation = 1.0;
       L = normalize(-light.dir);
-      light_pos = position - light.dir * MAX_TRACE_LENGTH;
+      light_pos = position + L * 99999999;
 
     } else {
       light_pos = light.pos;
@@ -126,11 +128,11 @@ main() {
 
     vec3 bary;
 
-    uint ret = ray_cast(position + (normal * u_bias), light_pos, u_bias, bary,
-                          tri, vert0, vert1, vert2, luxel_albedo, false);
+    uint ret = ray_cast(position + (L * u_bias), light_pos, u_bias, bary,
+                          tri, vert0, vert1, vert2, luxel_albedo);
 
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
-      if (ret == RAY_FRONT && (tri.flags & TRIFLAGS_SKY) != 0) {
+      if ((ret != RAY_MISS) && ((tri.flags & TRIFLAGS_SKY) != 0)) {
         // Hit sky, sun light is visible.
         ret = RAY_MISS;
 
@@ -139,6 +141,8 @@ main() {
         ret = RAY_FRONT;
       }
     }
+
+    vec3 contrib = light.color.rgb * attenuation;
 
     /*if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
       // Special case for sun light to implement soft shadows.
@@ -168,23 +172,40 @@ main() {
 
     } else*/ if (ret == RAY_MISS) {
       if (light.bake_direct == 1) {
-        static_light += attenuation * light.color.rgb;
+        static_light += contrib;
+
+        float c[4] = float[](
+          0.282095, //l0
+          0.488603 * L.y, //l1n1
+          0.488603 * L.z, //l1n0
+          0.488603 * L.x //l1p1
+        );
+
+        for (uint j = 0; j < 4; ++j) {
+          sh_accum[j].rgb += contrib * c[j];
+        }
 
       } else {
-        dynamic_light += attenuation * light.color.rgb;
+        dynamic_light += contrib;
       }
     }
   }
 
-  // Store dynamic-only light in the dynamic direct texture.
+#if 1
+  imageStore(luxel_direct, ivec3(palette_pos, u_palette_page * 4), sh_accum[0]);
+  imageStore(luxel_direct, ivec3(palette_pos, u_palette_page * 4 + 1), sh_accum[1]);
+  imageStore(luxel_direct, ivec3(palette_pos, u_palette_page * 4 + 2), sh_accum[2]);
+  imageStore(luxel_direct, ivec3(palette_pos, u_palette_page * 4 + 3), sh_accum[3]);
+#else
+  imageStore(luxel_direct, ivec3(palette_pos, u_palette_page * 4), vec4(static_light, 1.0));
+#endif
+  //
+
   dynamic_light *= albedo;
   dynamic_light += emission;
   imageStore(luxel_direct_dynamic, palette_coord, vec4(dynamic_light, 1.0));
 
-  // Store dynamic+static light in the reflectivity texture for bouncing light.
+  // Reflectivity = ((static light + dynamic light) * albedo) + emission
   dynamic_light += static_light * albedo;
   imageStore(luxel_reflectivity, palette_coord, vec4(dynamic_light, 1.0));
-
-  // Store only the static light in the visual output.
-  imageStore(luxel_direct, palette_coord, vec4(static_light, 1.0));
 }

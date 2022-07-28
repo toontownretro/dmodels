@@ -84,7 +84,17 @@ bool ray_aabb_test(vec3 mins, vec3 maxs, vec3 origin, vec3 recip_dir, out float 
  */
 uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out LightmapTri tri,
               out LightmapVertex vert0, out LightmapVertex vert1,
-              out LightmapVertex vert2, in sampler2DArray luxel_albedo_samp, bool ignore_vertex_lit) {
+              out LightmapVertex vert2
+#ifndef TRACE_NO_ALPHA_TEST
+              , in sampler2DArray luxel_albedo_samp
+#endif
+#ifdef TRACE_HIT_DIST
+              , out float o_hit_dist
+#endif
+#ifdef TRACE_NORMAL
+              , out vec3 o_normal
+#endif
+              ) {
   KDNode curr_node;
   KDLeaf leaf;
 
@@ -155,7 +165,7 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out Lig
       get_lightmap_tri_1(tri_index, ttri);
 
 #ifdef TRACE_MODE_PROBES
-      if (ignore_vertex_lit && ttri.page < -1) {
+      if (ttri.page < -1) {
         continue;
       }
 #endif
@@ -182,20 +192,34 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out Lig
 
           } else
 #endif
+#ifdef TRACE_IGNORE_BACKFACE
+
+          if (backface) {
+            alpha = 0.0;
+          } else
+#endif
           if (ttri.page >= 0) {
             get_lightmap_vertex_1(ttri.indices.x, tvert0);
             get_lightmap_vertex_1(ttri.indices.y, tvert1);
             get_lightmap_vertex_1(ttri.indices.z, tvert2);
+#ifndef TRACE_NO_ALPHA_TEST
             if ((ttri.flags & TRIFLAGS_TRANSPARENT) != 0) {
               // Lightmapped triangle with alpha in albedo.  Grab alpha at
               // ray intersection point.
               vec3 uvw = vec3(barycentric.x * tvert0.uv + barycentric.y * tvert1.uv + barycentric.z * tvert2.uv, float(ttri.page));
               alpha = textureLod(luxel_albedo_samp, uvw, 0.0).a;
             }
+#endif // TRACE_NO_ALPHA_TEST
           }
           if (alpha >= 0.5) {
             hit = backface ? RAY_BACK : RAY_FRONT;
             t_exit = hit_dist;
+#ifdef TRACE_HIT_DIST
+            o_hit_dist = hit_dist;
+#endif
+#ifdef TRACE_NORMAL
+            o_normal = normal;
+#endif
             o_bary = barycentric;
             tri = ttri;
             vert0 = tvert0;
@@ -233,8 +257,10 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out Lig
   return hit;
 }
 
-const float PI = 3.14159265f;
+const float PI = 3.141592653589793;
 const float GOLDEN_ANGLE = PI * (3.0 - sqrt(5.0));
+#define COSINE_A1 ((2.0 * PI) / 3.0)
+#define COSINE_A2 (PI / 4.0)
 
 // https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
 uint hash(uint value) {

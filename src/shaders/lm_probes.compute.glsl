@@ -82,16 +82,17 @@ main() {
       ray_dir.z *= -1.0;
     }
 
+    ray_dir = normalize(ray_dir);
+
     vec3 barycentric;
     vec3 light = vec3(0.0);
 
     uint trace_result = ray_cast(position + ray_dir * u_bias, position + ray_dir * 9999999,
-                                 u_bias, barycentric, tri, vert0, vert1, vert2, luxel_albedo, true);
+                                 u_bias, barycentric, tri, vert0, vert1, vert2, luxel_albedo);
     if (trace_result == RAY_FRONT) {
       if ((tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky.  Bring in sky ambient color.
         light = u_sky_color;
-        active_rays += 1.0;
 
       } else if (tri.page >= 0) {
         vec2 uv0 = vert0.uv;
@@ -99,7 +100,8 @@ main() {
         vec2 uv2 = vert2.uv;
         vec3 uvw = vec3(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2, float(tri.page));
 
-        light = textureLod(luxel_light, uvw, 0.0).rgb;
+        vec3 L0 = textureLod(luxel_light, vec3(uvw.xy, float(tri.page * 4)), 0.0).rgb;
+        light = L0 / 0.282095; // reverse L0 coefficient
         light += textureLod(luxel_light_dynamic, uvw, 0.0).rgb;
         //light = vec3(1);
       }
@@ -140,7 +142,7 @@ main() {
 
   //if (u_ray_to >= u_ray_count) {
     for (uint j = 0; j < 9; j++) {
-      probe_sh_accum[j] *= 4.0 / active_rays;
+      probe_sh_accum[j] *= (2.0 / active_rays);
     }
   //}
 

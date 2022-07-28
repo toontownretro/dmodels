@@ -13,12 +13,17 @@
  * @date 2022-06-07
  */
 
+#define TRACE_MODE_DIRECT 1
+#define TRACE_IGNORE_BACKFACE 1
+
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 layout(rgba32f) uniform writeonly image2D vtx_reflectivity;
+layout(rgba32f) uniform writeonly image2D vtx_light;
+layout(rgba32f) uniform writeonly image2D vtx_light_dynamic;
 uniform sampler2D vtx_albedo;
 uniform sampler2DArray luxel_albedo;
 
@@ -54,6 +59,7 @@ main() {
   vec3 albedo = texelFetch(vtx_albedo, palette_pos, 0).rgb;
 
   vec3 direct_light = vec3(0.0);
+  vec3 dynamic_light = vec3(0.0);
 
   LightmapTri tri;
   LightmapVertex vert0, vert1, vert2;
@@ -98,9 +104,9 @@ main() {
 
     vec3 bary;
 
-    uint ret = ray_cast(position + normal * u_bias, light_pos, u_bias, bary, tri, vert0, vert1, vert2, luxel_albedo, false);
+    uint ret = ray_cast(position + L * u_bias, light_pos, u_bias, bary, tri, vert0, vert1, vert2, luxel_albedo);
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
-      if (ret == RAY_FRONT && (tri.flags & TRIFLAGS_SKY) != 0) {
+      if (ret != RAY_MISS && (tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky, sun light is visible.
         ret = RAY_MISS;
       } else {
@@ -109,11 +115,21 @@ main() {
     }
 
     if (ret == RAY_MISS) {
-      direct_light += attenuation * light.color.rgb;
+      if (light.bake_direct == 1) {
+        direct_light += attenuation * light.color.rgb;
+      } else {
+        dynamic_light += attenuation * light.color.rgb;
+      }
     }
   }
 
-  // Modulate direct light by albedo for reflectivity amount.
+  imageStore(vtx_light, palette_pos, vec4(direct_light, 1.0));
+
+  dynamic_light *= albedo;
+  imageStore(vtx_light_dynamic, palette_pos, vec4(dynamic_light, 1.0));
+
+  // Reflectivity = (static light + dynamic light) * albedo
   direct_light *= albedo;
+  direct_light += dynamic_light;
   imageStore(vtx_reflectivity, palette_pos, vec4(direct_light, 1.0));
 }
