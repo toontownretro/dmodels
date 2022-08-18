@@ -16,10 +16,10 @@ int FindCascade(vec4 shadowCoords[4], inout vec3 proj, int numCascades)
 void GetSunShadow(inout float lshad, sampler2DArrayShadow shadowSampler, vec4 shadowCoords[4],
                   float NdotL, int numCascades)
 {
-    if (NdotL <= 0.0) {
-        lshad = 1.0;
-        return;
-    }
+    //if (NdotL <= 0.0) {
+    //    lshad = 0.0;
+    //    return;
+    //}
 
     lshad = 0.0;
 

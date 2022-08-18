@@ -204,7 +204,7 @@ ambientLookup(vec3 wnormal) {
 }
 
 #if DIRECT_LIGHT
-vec3 diffuseTerm(float NdotL, float shadow) {
+vec3 diffuseTerm(float NdotL/*, float shadow*/) {
   float result;
   if (false) {//HALFLAMBERT) {
     result = clamp(NdotL * 0.5 + 0.5, 0, 1);
@@ -215,7 +215,7 @@ vec3 diffuseTerm(float NdotL, float shadow) {
     result = clamp(NdotL, 0, 1);
   }
 
-  result *= shadow;
+  //result *= shadow;
 
   vec3 diff = vec3(result);
 #if LIGHTWARP
@@ -302,14 +302,16 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
     //}
   }
 
-  vec3 NdotL = diffuseTerm(fNdotL, shadowFactor);
+  lightAtten *= shadowFactor;
+
+  vec3 NdotL = diffuseTerm(fNdotL/*, shadowFactor*/);
 
   diffuseLighting += lightColor * lightAtten * NdotL;
 
 #if PHONG
   vec3 localSpecular = vec3(0.0);
   vec3 localRim = vec3(0.0);
-  lightAtten *= shadowFactor;
+  //lightAtten *= shadowFactor;
   specularAndRimTerms(localSpecular, localRim, L, eyeDir, worldNormal, specularExponent,
                       lightColor * lightAtten, rimExponent, fresnel);
   specularLighting += localSpecular;
