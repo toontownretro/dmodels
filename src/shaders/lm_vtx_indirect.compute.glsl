@@ -15,6 +15,7 @@
 
 // Compute shader for gathering indirect lighting for a vertex.
 
+#define TRACE_MODE_INDIRECT 1
 #define TRACE_IGNORE_BACKFACE 1
 
 #extension GL_GOOGLE_include_directive : enable

@@ -15,6 +15,8 @@
 
 // Compute shader for gathering indirect lighting for a luxel.
 
+#define TRACE_MODE_INDIRECT 1
+
 #extension GL_GOOGLE_include_directive : enable
 #include "shaders/lm_compute.inc.glsl"
 

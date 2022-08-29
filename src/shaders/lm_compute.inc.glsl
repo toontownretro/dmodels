@@ -19,7 +19,7 @@ const float RAY_EPSILON = 0.00001;
 #define TRIFLAGS_SKY 1
 #define TRIFLAGS_TRANSPARENT 2
 #define TRIFLAGS_DONTCASTSHADOWS 4
-#define TRIFLAGS_DONTRECEIVESHADOWS 8
+#define TRIFLAGS_DONTREFLECTLIGHT 8
 
 /**
  * Returns true if the given ray intersects the given triangle.
@@ -186,8 +186,17 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out Lig
         }
         if (hit_dist < t_exit) {
           float alpha = 1.0;
-#ifdef TRACE_MODE_DIRECT
+#if defined(TRACE_MODE_DIRECT)
           if ((ttri.flags & TRIFLAGS_DONTCASTSHADOWS) != 0) {
+            // Triangle shouldn't block light.  Rays to lights don't hit this
+            // triangle.
+            alpha = 0.0;
+
+          } else
+#elif defined(TRACE_MODE_INDIRECT) || defined(TRACE_MODE_PROBES)
+          if ((ttri.flags & TRIFLAGS_DONTREFLECTLIGHT) != 0) {
+            // Triangle shouldn't reflect light.  Indirect rays don't hit
+            // this triangle.
             alpha = 0.0;
 
           } else
