@@ -12,11 +12,10 @@ uniform sampler2D refractionSampler;
 
 #if FOG
 uniform sampler2D refractionDepthSampler;
-uniform vec3 u_fogColor;
-uniform vec2 u_fogRange;
+uniform vec4 u_fogColor_density;
 uniform vec2 u_fogLensNearFar;
-#define u_fogStart (u_fogRange.x)
-#define u_fogEnd (u_fogRange.y)
+#define u_fogColor (u_fogColor_density.xyz)
+#define u_fogDensity (u_fogColor_density.w)
 #define u_fogNear (u_fogLensNearFar.x)
 #define u_fogFar (u_fogLensNearFar.y)
 #endif
@@ -53,9 +52,8 @@ calc_dist(float depth, float near, float far) {
 }
 
 float
-calc_fog_factor(float dist, float start, float end) {
-  float scale = 1.0 / (end - start);
-  return clamp(1.0 - ((end - dist) * scale), 0.0, 1.0);
+calc_fog_factor(float dist, float density) {
+  return clamp(exp2(density * dist * -1.442695), 0, 1);
 }
 
 void
@@ -101,13 +99,11 @@ main() {
   vec2 reflect_texcoord;
   vec2 refract_texcoord;
 
-  //float water_volume_dist = 1000.0;
-
   vec4 N;
   N.xy = normal.xy;
   N.w = normal.x;
   N.z = normal.y;
-  vec4 dependent_texcoords = N * norm_sample.a * u_reflectRefractScale * 0.1;// * fog_value;
+  vec4 dependent_texcoords = N * norm_sample.a * u_reflectRefractScale * 0.1;
 
   dependent_texcoords += l_reflectxy_refractyx * oo_w;
   reflect_texcoord = dependent_texcoords.xy;
@@ -121,7 +117,6 @@ main() {
   // Distance from camera to water surface:
   float water_surf_depth = gl_FragCoord.z;
   float water_surf_dist = calc_dist(water_surf_depth, u_fogNear, u_fogFar);
-  //float water_surf_dist = length(l_eye_pos);
 
   // Distance from camera to floor under water.
   float water_floor_depth = texture(refractionDepthSampler, refract_texcoord).x;
@@ -129,17 +124,9 @@ main() {
 
   float water_volume_dist = water_floor_dist - water_surf_dist;
 
-  float water_fog_factor = calc_fog_factor(water_volume_dist, u_fogStart, u_fogEnd);
-
-
+  float water_fog_factor = calc_fog_factor(water_volume_dist, u_fogDensity);
   //o_color = vec4(vec3(water_fog_factor), 1.0);
   //return;
-
-  refract_color = mix(refract_color, pow(u_fogColor / vec3(255.0), vec3(2.2)), water_fog_factor);
-#endif
-
-  float NdotV = clamp(dot(worldNormal, worldEyeDir), 0, 1);
-  float fresnel = pow(1.0 - NdotV, u_fresnelExponent.x);
 
   // Get lightmap color.
   //vec3 L0 = textureArrayBicubic(lightmapSampler, vec3(l_texcoord_lightmap, 0)).rgb;
@@ -149,8 +136,19 @@ main() {
   //vec3 diffuseLighting;
   //diffuseLighting = L0 + L1x * worldNormal.x + L1y * worldNormal.y + L1z * worldNormal.z;
 
+  vec3 fog_color = pow(u_fogColor, vec3(2.2));
+
+  refract_color = mix(fog_color, refract_color, water_fog_factor);
+#endif
+
+  float NdotV = clamp(dot(worldNormal, worldEyeDir), 0, 1);
+  float fresnel = pow(1.0 - NdotV, u_fresnelExponent.x);
+
+  vec3 color = refract_color;
+  color += reflect_color * fresnel;
+
   //vec3 color = vec3(0.0);//diffuseLighting;
-  vec3 color = mix(refract_color, reflect_color, fresnel);
+  //vec3 color = mix(refract_color, reflect_color, fresnel);
 
   o_color = vec4(color, 1.0);//fresnel);
 }
