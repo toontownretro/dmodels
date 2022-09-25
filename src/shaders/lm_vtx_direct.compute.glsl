@@ -104,7 +104,7 @@ main() {
 
     vec3 bary;
 
-    uint ret = ray_cast(position + L * u_bias, light_pos, u_bias, bary, tri, vert0, vert1, vert2, luxel_albedo);
+    uint ret = ray_cast(position + normal * u_bias, light_pos, u_bias, bary, tri, vert0, vert1, vert2, luxel_albedo);
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
       if (ret != RAY_MISS && (tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky, sun light is visible.
@@ -125,11 +125,8 @@ main() {
 
   imageStore(vtx_light, palette_pos, vec4(direct_light, 1.0));
 
-  dynamic_light *= albedo;
-  imageStore(vtx_light_dynamic, palette_pos, vec4(dynamic_light, 1.0));
+  imageStore(vtx_light_dynamic, palette_pos, vec4(dynamic_light * albedo, 1.0));
 
   // Reflectivity = (static light + dynamic light) * albedo
-  direct_light *= albedo;
-  direct_light += dynamic_light;
-  imageStore(vtx_reflectivity, palette_pos, vec4(direct_light, 1.0));
+  imageStore(vtx_reflectivity, palette_pos, vec4((direct_light + dynamic_light) * albedo, 1.0));
 }

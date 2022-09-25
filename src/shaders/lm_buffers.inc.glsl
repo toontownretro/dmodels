@@ -320,30 +320,44 @@ get_kd_node_1(int index, inout KDNode node) {
   node.maxs = texelFetch(kd_nodes, start + 2).xyz;
 }
 
+#define KD_NEIGHBOR_BIAS 0.005
 int
 get_kd_neighbor(in KDNode node, in KDLeaf leaf, in vec3 point) {
-  if (abs(point.y - node.maxs.y) < 0.0001) {
-    return leaf.neighbors[NEIGHBOR_FRONT];
+  int closest_neighbor = -1;
+  float closest_dist = 9999999.0;
 
-  } else if (abs(point.y - node.mins.y) < 0.0001) {
-    return leaf.neighbors[NEIGHBOR_BACK];
-
-  } else if (abs(point.x - node.mins.x) < 0.0001) {
-    return leaf.neighbors[NEIGHBOR_LEFT];
-
-  } else if (abs(point.x - node.maxs.x) < 0.0001) {
-    return leaf.neighbors[NEIGHBOR_RIGHT];
-
-  } else if (abs(point.z - node.mins.z) < 0.0001) {
-    return leaf.neighbors[NEIGHBOR_BOTTOM];
-
-  } else if (abs(point.z - node.maxs.z) < 0.0001) {
-    return leaf.neighbors[NEIGHBOR_TOP];
-
-  } else {
-    // BAD!
-    return -1;
+  float dist = abs(point.y - node.maxs.y);
+  if (dist < closest_dist) {
+    closest_neighbor = leaf.neighbors[NEIGHBOR_FRONT];
+    closest_dist = dist;
   }
+  dist = abs(point.y - node.mins.y);
+  if (dist < closest_dist) {
+    closest_neighbor = leaf.neighbors[NEIGHBOR_BACK];
+    closest_dist = dist;
+  }
+  dist = abs(point.x - node.mins.x);
+  if (dist < closest_dist) {
+    closest_neighbor = leaf.neighbors[NEIGHBOR_LEFT];
+    closest_dist = dist;
+  }
+  dist = abs(point.x - node.maxs.x);
+  if (dist < closest_dist) {
+    closest_neighbor = leaf.neighbors[NEIGHBOR_RIGHT];
+    closest_dist = dist;
+  }
+  dist = abs(point.z - node.mins.z);
+  if (dist < closest_dist) {
+    closest_neighbor = leaf.neighbors[NEIGHBOR_BOTTOM];
+    closest_dist = dist;
+  }
+  dist = abs(point.z - node.maxs.z);
+  if (dist < closest_dist) {
+    closest_neighbor = leaf.neighbors[NEIGHBOR_TOP];
+    closest_dist = dist;
+  }
+
+  return closest_neighbor;
 }
 
 uniform usamplerBuffer kd_triangles;

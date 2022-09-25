@@ -128,7 +128,7 @@ main() {
 
     vec3 bary;
 
-    uint ret = ray_cast(position + (L * u_bias), light_pos, u_bias, bary,
+    uint ret = ray_cast(position + (normal * u_bias), light_pos, u_bias, bary,
                           tri, vert0, vert1, vert2, luxel_albedo);
 
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
@@ -201,11 +201,8 @@ main() {
 #endif
   //
 
-  dynamic_light *= albedo;
-  dynamic_light += emission;
-  imageStore(luxel_direct_dynamic, palette_coord, vec4(dynamic_light, 1.0));
+  imageStore(luxel_direct_dynamic, palette_coord, vec4(dynamic_light * albedo + emission, 1.0));
 
   // Reflectivity = ((static light + dynamic light) * albedo) + emission
-  dynamic_light += static_light * albedo;
-  imageStore(luxel_reflectivity, palette_coord, vec4(dynamic_light, 1.0));
+  imageStore(luxel_reflectivity, palette_coord, vec4(((dynamic_light + static_light) * albedo) + emission, 1.0));
 }
