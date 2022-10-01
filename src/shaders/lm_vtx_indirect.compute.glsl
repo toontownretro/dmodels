@@ -88,6 +88,12 @@ main() {
   uint noise = random_seed(ivec3(0, palette_pos));
   for (uint i = 0; i < uint(u_ray_count); i++) {
     vec3 ray_dir = normal_mat * generate_hemisphere_cosine_weighted_direction(noise);
+    ray_dir = normalize(ray_dir);
+
+    float dt = dot(normal, ray_dir);
+    if (dt <= 0.001) {
+      continue;
+    }
 
     vec3 barycentric;
 

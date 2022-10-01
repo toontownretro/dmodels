@@ -106,7 +106,7 @@ main() {
 
     uint ret = ray_cast(position + normal * u_bias, light_pos, u_bias, bary, tri, vert0, vert1, vert2, luxel_albedo);
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
-      if (ret != RAY_MISS && (tri.flags & TRIFLAGS_SKY) != 0) {
+      if ((ret != RAY_MISS) && ((tri.flags & TRIFLAGS_SKY) != 0)) {
         // Hit sky, sun light is visible.
         ret = RAY_MISS;
       } else {

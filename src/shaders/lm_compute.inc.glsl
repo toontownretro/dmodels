@@ -46,7 +46,7 @@ ray_hits_triangle(vec3 from, vec3 dir, float max_dist, float bias, vec3 p0,
 	barycentric.x = 1.0 - (barycentric.z + barycentric.y);
 	dist = dot(triangle_normal, e2);
 
-	return (dist > bias) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
+	return (dist >= 0.0) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
 }
 
 #define RAY_MISS 0
