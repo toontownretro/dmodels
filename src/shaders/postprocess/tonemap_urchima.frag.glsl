@@ -3,6 +3,8 @@
 in vec2 l_texcoord;
 
 uniform sampler2D sceneTexture;
+uniform vec4 params0;
+uniform vec2 params1;
 
 out vec4 o_color;
 
@@ -30,12 +32,12 @@ vec3 Tonemap_Uchimura(vec3 x, float P, float a, float m, float l, float c, float
 }
 
 vec3 Tonemap_Uchimura(vec3 x) {
-  const float P = 1.0;  // max display brightness
-  const float a = 1.0;  // contrast
-  const float m = 0.22; // linear section start
-  const float l = 0.4;  // linear section length
-  const float c = 1.33; // black
-  const float b = 0.0;  // pedestal
+  const float P = params0.x;//1.0;  // max display brightness
+  const float a = params0.y;//1.0;  // contrast
+  const float m = params0.z;//0.22; // linear section start
+  const float l = params0.w;//0.4;  // linear section length
+  const float c = params1.x;//1.33; // black
+  const float b = params1.y;//0.0;  // pedestal
   return Tonemap_Uchimura(x, P, a, m, l, c, b);
 }
 
