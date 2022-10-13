@@ -14,9 +14,9 @@
 #include "shadersnew/common.inc.glsl"
 
 // FIXME: Make these configurable
-#define SLOPE_BIAS 0.0
-#define NORMAL_BIAS 0.0
-#define FIXED_BIAS 0.0
+#define SLOPE_BIAS 0.11
+#define NORMAL_BIAS 0.3
+#define FIXED_BIAS 0.1
 
 vec2 GetShadowBias(vec3 n, vec3 l) {
     float cosAlpha = clamp(dot(n, l), 0, 1);
@@ -56,8 +56,8 @@ void ComputeSunShadowPositions(vec3 worldNormal, vec4 worldPosition, vec3 sunVec
     //sunVector = -sunVector;
 
     for (int i = 0; i < 4 && i < num_cascades; i++) {
-        //vec3 biasedPos = GetSplitBiasedPos(worldPosition.xyz, worldNormal, sunVector, i);
-        vec3 projected = Project(pssmMVPs[i], worldPosition.xyz);
+        vec3 biasedPos = GetSplitBiasedPos(worldPosition.xyz, worldNormal, sunVector, i);
+        vec3 projected = Project(pssmMVPs[i], biasedPos);
         //projected.z -= GetFixedBias(i);
         pssmCoords[i] = vec4(projected, 1);
     }
