@@ -2,6 +2,7 @@
 
 // 0 is point-eye, 1 is point-world
 #pragma combo BILLBOARD_MODE 0 1
+#pragma combo ANIMATED 0 1
 
 /**
  * PANDA 3D SOFTWARE
@@ -40,11 +41,17 @@ uniform mat4 p3d_TextureTransform[1];
 in vec4 v_vertex_color[];
 in float v_rotate[];
 in vec2 v_size[];
+#if ANIMATED
+flat in vec3 v_anim_data[];
+#endif
 
 out vec2 g_tex_coord;
 out vec4 g_vertex_color;
 out vec4 g_world_position;
 out vec4 g_eye_position;
+#if ANIMATED
+flat out vec3 g_anim_data;
+#endif
 
 /**
  * Rotates the indicated point angle degrees around center.
@@ -127,6 +134,10 @@ main() {
     g_tex_coord = (p3d_TextureTransform[0] * vec4(texcoord, 1, 1)).xy;
 
     g_vertex_color = v_vertex_color[0];
+
+#if ANIMATED
+    g_anim_data = v_anim_data[0];
+#endif
 
     EmitVertex();
   }
