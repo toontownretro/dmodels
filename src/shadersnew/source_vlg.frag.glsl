@@ -140,6 +140,10 @@ layout(constant_id = 10) const int NUM_CLIP_PLANES = 0;
 
 layout(constant_id = 11) const bool BAKED_VERTEX_LIGHT = false;
 
+uniform vec3 colorAdd;
+uniform vec3 colorAddFresnel;
+layout(constant_id = 12) const bool DO_COLOR_ADD = false;
+
 out vec4 o_color;
 
 float Fresnel(vec3 vNormal, vec3 vEyeDir)
@@ -162,9 +166,15 @@ float Fresnel(vec3 normal, vec3 eyeDir, float exponent)
 }
 
 float Fresnel(vec3 normal, vec3 eyeDir, vec3 ranges) {
-  float f = clamp(1 - dot(normal, eyeDir), 0, 1);
-  f = f * f - 0.5;
-  return ranges.y + (f >= 0 ? ranges.z : ranges.x) * f;
+  float f = 1 - clamp(dot(normal, eyeDir), 0, 1);
+  f *= f;
+  float result = f;
+  if (f > 0.5) {
+    result = mix(ranges.y, ranges.z, (2 * f) - 1);
+  } else {
+    result = mix(ranges.x, ranges.y, 2 * f);
+  }
+  return result;
 }
 
 vec3
@@ -496,6 +506,10 @@ main() {
 #endif
   diffuseComponent += albedo.rgb * selfIllumTint * selfIllumMask;
 #endif
+
+  if (DO_COLOR_ADD) {
+    diffuseComponent += pow(colorAdd, vec3(2.2)) * Fresnel(worldNormal, worldVertToEyeDir, colorAddFresnel);
+  }
 
 #if RIMLIGHT
   float rimMultiply = fRimMask * fRimFresnel * 0.3;
