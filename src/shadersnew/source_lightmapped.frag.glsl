@@ -4,7 +4,7 @@
 #pragma combo ENVMAP      0 1
 #pragma combo ENVMAPMASK  0 1
 #pragma combo SELFILLUM   0 1
-#pragma combo SUNLIGHT    0 1
+#pragma combo SUNLIGHT    0 2
 #pragma combo FOG         0 1
 #pragma combo ALPHA_TEST  0 1
 #pragma combo BASETEXTURE2 0 1
@@ -55,9 +55,11 @@ uniform struct p3d_LightSourceParameters {
   vec4 color;
   vec4 direction;
 } p3d_LightSource[1];
+#if SUNLIGHT == 2
 uniform sampler2DArrayShadow p3d_CascadeShadowMap;
 in vec4 l_cascadeCoords[4];
 layout(constant_id = 3) const int NUM_CASCADES = 0;
+#endif
 #endif // SUNLIGHT
 
 #if FOG
@@ -275,8 +277,12 @@ main() {
   }
 
   if (NdotL > 0.0) {
+#if SUNLIGHT == 2
     float sunShadowFactor = 0.0;
     GetSunShadow(sunShadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, NdotL, NUM_CASCADES);
+#else
+    float sunShadowFactor = 1.0;
+#endif
     vec3 light = p3d_LightSource[0].color.rgb * sunShadowFactor * NdotL;
     diffuseLighting += light;
   }
