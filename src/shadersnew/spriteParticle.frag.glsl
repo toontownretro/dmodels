@@ -4,7 +4,7 @@
 #pragma combo CLIPPING 0 1
 #pragma combo ALPHA_TEST 0 1
 #pragma combo FOG 0 1
-#pragma combo ANIMATED 0 2
+#pragma combo ANIMATED 0 1
 
 #pragma skip $[and $[ANIMATED],$[not $[BASETEXTURE]]]
 
@@ -29,9 +29,9 @@ in vec4 g_vertex_color;
 in vec4 g_world_position;
 in vec4 g_eye_position;
 #if ANIMATED
-flat in vec3 g_anim_data;
-uniform float osg_FrameTime;
-layout(constant_id = 4) const int FRAMES_PER_ANIM = 0;
+flat in int g_anim_frame;
+flat in int g_anim_next_frame;
+flat in float g_anim_frac;
 #endif
 
 out vec4 o_color;
@@ -88,23 +88,13 @@ main() {
 #if !ANIMATED
   o_color = texture(baseTextureSampler, g_tex_coord);
 #else
-  int anim_index = int(g_anim_data.x);
-  float fps = g_anim_data.y;
-  float start_time = g_anim_data.z;
-  float elapsed = osg_FrameTime - start_time;
-  float fframe = elapsed * fps;
-  int frame = int(fframe) % FRAMES_PER_ANIM;
-  int base_frame = anim_index * FRAMES_PER_ANIM;
-
-#if ANIMATED == 2
-  int next_frame = (frame + 1) % FRAMES_PER_ANIM;
-  float frac = fframe - int(fframe);
-  vec4 samp0 = texture(baseTextureSampler, vec3(g_tex_coord, base_frame + frame));
-  vec4 samp1 = texture(baseTextureSampler, vec3(g_tex_coord, base_frame + next_frame));
-  o_color = mix(samp0, samp1, frac);
-#else
-  o_color = texture(baseTextureSampler, vec3(g_tex_coord, base_frame + frame));
-#endif
+  if (g_anim_frame != g_anim_next_frame) {
+    vec4 samp0 = texture(baseTextureSampler, vec3(g_tex_coord, g_anim_frame));
+    vec4 samp1 = texture(baseTextureSampler, vec3(g_tex_coord, g_anim_next_frame));
+    o_color = mix(samp0, samp1, g_anim_frac);
+  } else {
+    o_color = texture(baseTextureSampler, vec3(g_tex_coord, g_anim_frame));
+  }
 #endif
 
 #else

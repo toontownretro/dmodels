@@ -42,7 +42,9 @@ in vec4 v_vertex_color[];
 in float v_rotate[];
 in vec2 v_size[];
 #if ANIMATED
-flat in vec3 v_anim_data[];
+flat in int v_anim_frame[];
+flat in int v_anim_next_frame[];
+flat in float v_anim_frac[];
 #endif
 
 out vec2 g_tex_coord;
@@ -50,7 +52,9 @@ out vec4 g_vertex_color;
 out vec4 g_world_position;
 out vec4 g_eye_position;
 #if ANIMATED
-flat out vec3 g_anim_data;
+flat out int g_anim_frame;
+flat out int g_anim_next_frame;
+flat out float g_anim_frac;
 #endif
 
 /**
@@ -136,7 +140,9 @@ main() {
     g_vertex_color = v_vertex_color[0];
 
 #if ANIMATED
-    g_anim_data = v_anim_data[0];
+    g_anim_frame = v_anim_frame[0];
+    g_anim_next_frame = v_anim_next_frame[0];
+    g_anim_frac = v_anim_frac[0];
 #endif
 
     EmitVertex();

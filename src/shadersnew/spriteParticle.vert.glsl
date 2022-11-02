@@ -31,8 +31,20 @@ in float rotate;
 in vec2 size;
 
 #if ANIMATED
-in vec3 anim_data;
-flat out vec3 v_anim_data;
+in vec4 anim_data;
+in vec3 anim_data2;
+#define anim_index int(anim_data.x)
+#define anim_fps (anim_data.y)
+#define anim_particle_spawn_time (anim_data.z)
+#define anim_first_frame int(anim_data.w)
+#define anim_num_frames int(anim_data2.x)
+#define anim_loop bool(anim_data2.y)
+#define anim_interp bool(anim_data2.z)
+
+flat out int v_anim_frame;
+flat out int v_anim_next_frame;
+flat out float v_anim_frac;
+uniform float osg_FrameTime;
 #endif
 
 out vec4 v_vertex_color;
@@ -46,7 +58,28 @@ main() {
   v_size = size;
 
 #if ANIMATED
-  v_anim_data = anim_data;
+  float elapsed = osg_FrameTime - anim_particle_spawn_time;
+  float fframe = elapsed * anim_fps;
+  int frame = int(fframe);
+  if (anim_loop) {
+    frame %= anim_num_frames;
+  } else {
+    frame = min(frame, anim_num_frames - 1);
+  }
+  int next_frame = frame + 1;
+  if (anim_loop) {
+    next_frame %= anim_num_frames;
+  } else {
+    next_frame = min(next_frame, anim_num_frames - 1);
+  }
+
+  v_anim_frame = frame + anim_first_frame;
+  if (anim_interp) {
+    v_anim_next_frame = next_frame + anim_first_frame;
+  } else {
+    v_anim_next_frame = v_anim_frame;
+  }
+  v_anim_frac = fframe - int(fframe);
 #endif
 
   vec4 color_scale = p3d_ColorScale;
