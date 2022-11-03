@@ -51,9 +51,6 @@ do_fog(in vec3 input_color, in vec3 eye_position, vec3 fog_color,
        in float exp_density, in float linear_end, in float linear_scale,
        in int fog_mode) {
 
-  // Gamma to linear on fog color.
-  fog_color.rgb = pow(fog_color.rgb, vec3(2.2));
-
   float dist = length(eye_position);
 
   switch (fog_mode) {

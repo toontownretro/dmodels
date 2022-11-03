@@ -318,7 +318,7 @@ void main() {
   outputColor = vec4(result, 1.0);
 
 #if FOG
-	outputColor.rgb = do_fog(outputColor.rgb, l_eyePosition.xyz, p3d_Fog.color.rgb,
+	outputColor.rgb = do_fog(outputColor.rgb, l_eyePosition.xyz, pow(p3d_Fog.color.rgb, vec3(2.2)),
                            p3d_Fog.density, p3d_Fog.end, p3d_Fog.scale,
                            FOG_MODE);
 #endif // FOG

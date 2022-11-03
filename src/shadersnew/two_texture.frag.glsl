@@ -25,6 +25,7 @@ uniform sampler2D lightmapTexture;
 
 #if FOG
 layout(constant_id = 0) const int FOG_MODE = FM_linear;
+layout(constant_id = 1) const int BLEND_MODE = 0;
 uniform struct p3d_FogParameters {
   vec4 color;
   float density;
@@ -45,7 +46,18 @@ main() {
 #endif
 
 #if FOG
-  outputColor.rgb = do_fog(outputColor.rgb, l_eyePos.xyz, p3d_Fog.color.rgb,
+  vec3 fog_color;
+  if (BLEND_MODE == 2) {
+    // Additive blending, we need black fog.
+    fog_color = vec3(0.0);
+  } else if (BLEND_MODE == 1) {
+    // Modulate blending, we need gray fog.
+    fog_color = vec3(0.5);
+  } else {
+    // Gamma-correct the fog color.
+    fog_color = pow(p3d_Fog.color.rgb, vec3(2.2));
+  }
+  outputColor.rgb = do_fog(outputColor.rgb, l_eyePos.xyz, fog_color,
                            p3d_Fog.density, p3d_Fog.end, p3d_Fog.scale,
                            FOG_MODE);
 #endif // FOG

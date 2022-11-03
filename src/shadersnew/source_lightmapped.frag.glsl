@@ -70,6 +70,7 @@ uniform struct p3d_FogParameters {
   float scale;
 } p3d_Fog;
 layout(constant_id = 4) const int FOG_MODE = FM_linear;
+layout(constant_id = 8) const int BLEND_MODE = 0;
 #endif // FOG
 
 #if ALPHA_TEST
@@ -332,7 +333,18 @@ main() {
   o_color = vec4(result, alpha);
 
 #if FOG
-  o_color.rgb = do_fog(o_color.rgb, l_eyePos.xyz, p3d_Fog.color.rgb,
+  vec3 fog_color;
+  if (BLEND_MODE == 2) {
+    // Additive blending, we need black fog.
+    fog_color = vec3(0.0);
+  } else if (BLEND_MODE == 1) {
+    // Modulate blending, we need gray fog.
+    fog_color = vec3(0.5);
+  } else {
+    // Gamma-correct the fog color.
+    fog_color = pow(p3d_Fog.color.rgb, vec3(2.2));
+  }
+  o_color.rgb = do_fog(o_color.rgb, l_eyePos.xyz, fog_color,
                        p3d_Fog.density, p3d_Fog.end, p3d_Fog.scale,
                        FOG_MODE);
 #endif
