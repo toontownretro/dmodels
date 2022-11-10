@@ -67,6 +67,8 @@ out vec3 l_vertex_light;
 
 layout(constant_id = 2) const bool BAKED_VERTEX_LIGHT = false;
 
+uniform mat4 baseTextureTransform;
+
 void
 main() {
   vec4 animated_vertex = p3d_Vertex;
@@ -85,7 +87,7 @@ main() {
   // Output final clip-space vertex position for GL.
   gl_Position = p3d_ProjectionMatrix * eye_pos;
 
-  l_texcoord = texcoord;
+  l_texcoord = (baseTextureTransform * vec4(texcoord, 1, 1)).xy;
 
   // Calculate world-space vertex information.
   l_world_pos = world_pos;
