@@ -18,10 +18,11 @@
 
 uniform sampler2D base_texture_sampler;
 uniform vec3 emission_color;
-uniform ivec2 first_triangle_transparency;
+uniform ivec3 first_triangle_transparency_emission;
 uniform vec2 geom_uv_mins;
 uniform vec2 geom_uv_maxs;
-#define has_transparency (bool(first_triangle_transparency.y))
+#define has_transparency (bool(first_triangle_transparency_emission.y))
+#define has_emission (bool(first_triangle_transparency_emission.z))
 
 in vec2 l_texcoord;
 in vec2 l_texcoord_lightmap;
@@ -121,12 +122,16 @@ main() {
   vec4 albedo = textureLod(base_texture_sampler, l_texcoord, 0);
 
   float alpha = 1.0;
-  if (has_transparency) {
+  if (has_transparency && !has_emission) {
     alpha = albedo.a;
   }
 
   albedo_output = vec4(albedo.rgb, alpha);
   position_output = vec4(vertex_pos, alpha);
   normal_output = vec4(normalize(l_world_normal), 1.0);
-  emission_output = vec4(emission_color, 1.0);
+  if (has_emission) {
+    emission_output = vec4(albedo.rgb * emission_color * albedo.a, 1.0);
+  } else {
+    emission_output = vec4(0, 0, 0, 1);
+  }
 }

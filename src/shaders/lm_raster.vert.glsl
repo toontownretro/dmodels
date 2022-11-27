@@ -23,8 +23,8 @@ in vec2 texcoord; // Base texture coordinate.
 
 uniform vec4 p3d_ColorScale;
 
-uniform ivec2 first_triangle_transparency;
-#define first_triangle (first_triangle_transparency.x)
+uniform ivec3 first_triangle_transparency_emission;
+#define first_triangle (first_triangle_transparency_emission.x)
 
 out vec2 l_texcoord;
 out vec3 l_world_normal;
