@@ -46,7 +46,7 @@ main() {
 
   l_reflectxy_refractyx = vec4(reflect_pos.x, reflect_pos.y, refract_pos.x, refract_pos.y);
 
-  l_texcoord = texcoord * 0.007;// * 10;
+  l_texcoord = texcoord;
   l_texcoord_lightmap = texcoord_lightmap;
 
   l_w = l_proj_pos.w;
