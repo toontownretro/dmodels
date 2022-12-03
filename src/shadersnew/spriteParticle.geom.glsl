@@ -77,7 +77,7 @@ uniform float osg_FrameTime;
 #if DIRECT_LIGHT || AMBIENT_LIGHT
 in vec3 v_normal[];
 out vec3 g_normal;
-#define NORMAL_CURVATURE 0.9
+#define NORMAL_CURVATURE 1.0
 #endif
 
 #if DIRECT_LIGHT
@@ -245,8 +245,8 @@ main() {
 #if DIRECT_LIGHT || AMBIENT_LIGHT
     vec3 world_center_to_corner = g_world_position.xyz - center_world;
     world_center_to_corner = normalize(world_center_to_corner);
-    vec3 n = mix(v_normal[0], world_center_to_corner, NORMAL_CURVATURE);
-    g_normal = normalize(n);
+    //vec3 n = world_center_to_corner;//mix(v_normal[0], world_center_to_corner, NORMAL_CURVATURE);
+    g_normal = world_center_to_corner;//normalize(n);
 #endif
 #if DIRECT_LIGHT
     g_basis_lighting0 = v_basis_lighting0[0];
