@@ -93,7 +93,10 @@ uniform vec4 p3d_WorldClipPlane[4];
 layout(constant_id = 7) const int NUM_CLIP_PLANES = 0;
 #endif
 
-uniform sampler2DArray lightmapTexture;
+uniform sampler2D lightmapTextureL0;
+uniform sampler2D lightmapTextureL1y;
+uniform sampler2D lightmapTextureL1z;
+uniform sampler2D lightmapTextureL1x;
 
 in vec2 l_texcoord;
 in vec2 l_texcoordLightmap;
@@ -239,10 +242,14 @@ main() {
   // Sample SH lightmap.
 
 #if 1
-  vec3 L0 = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 0)).rgb;
-  vec3 L1y = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 1)).rgb;
-  vec3 L1z = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 2)).rgb;
-  vec3 L1x = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 3)).rgb;
+  vec3 L0 = textureBicubic(lightmapTextureL0, l_texcoordLightmap).rgb;
+  vec3 L0factor = (L0 / 0.282095) * 0.488603;
+  vec3 L1y = textureBicubic(lightmapTextureL1y, l_texcoordLightmap).rgb * 2 - 1;
+  L1y *= L0factor;
+  vec3 L1z = textureBicubic(lightmapTextureL1z, l_texcoordLightmap).rgb * 2 - 1;
+  L1z *= L0factor;
+  vec3 L1x = textureBicubic(lightmapTextureL1x, l_texcoordLightmap).rgb * 2 - 1;
+  L1x *= L0factor;
   vec3 diffuseLighting;
   if (hasSSBump()) {
     diffuseLighting = L0 +
@@ -252,6 +259,7 @@ main() {
   } else {
     diffuseLighting = L0 + L1x * worldNormal.x + L1y * worldNormal.y + L1z * worldNormal.z;
   }
+  diffuseLighting = max(vec3(0.0), diffuseLighting);
 
   //o_color = vec4(diffuseLighting, alpha);
   //return;

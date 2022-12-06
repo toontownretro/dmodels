@@ -20,7 +20,7 @@ in vec3 p3d_Binormal;
 in vec4 p3d_Color;
 in vec2 texcoord;
 in vec2 texcoord_lightmap;
-in float blend;
+in uint blend;
 
 out vec4 l_worldPos;
 out vec3 l_worldNormal;
@@ -75,7 +75,7 @@ main() {
   colorScale.rgb = pow(colorScale.rgb, vec3(2.2));
   l_vertexColor = vertexColor * colorScale;
 
-  l_vertexBlend = blend / 255.0;
+  l_vertexBlend = float(blend) / 255.0;
 
 #if SUNLIGHT
   ComputeSunShadowPositions(l_worldNormal, l_worldPos,
