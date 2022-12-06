@@ -42,7 +42,7 @@ in vec4 p3d_Color;
 in vec3 p3d_Tangent;
 in vec3 p3d_Binormal;
 in vec2 texcoord;
-in vec3 vertex_lighting;
+in uvec4 vertex_lighting;
 #if SKINNING
 in vec4 transform_weight;
 in uvec4 transform_index;
@@ -68,6 +68,12 @@ out vec3 l_vertex_light;
 layout(constant_id = 2) const bool BAKED_VERTEX_LIGHT = false;
 
 uniform mat4 baseTextureTransform;
+
+vec3
+rgbe_to_rgb(uvec4 rgbe) {
+  float factor = pow(2.0, float(rgbe.w) - 128.0);
+  return vec3(float(rgbe.x) * factor, float(rgbe.y) * factor, float(rgbe.z) * factor);
+}
 
 void
 main() {
@@ -97,7 +103,7 @@ main() {
   l_world_binormal = normalize((p3d_ModelMatrix * vec4(-p3d_Binormal, 0.0)).xyz);
 
   if (BAKED_VERTEX_LIGHT) {
-    l_vertex_light = vertex_lighting;
+    l_vertex_light = rgbe_to_rgb(vertex_lighting);
   } else {
     l_vertex_light = vec3(1.0);
   }
