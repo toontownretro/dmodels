@@ -13,6 +13,7 @@
     common_shadows_vert.inc.glsl \
     common_vert.inc.glsl \
     common.inc.glsl \
+    compress_bc6h.compute.glsl \
     csmdepth.frag.glsl \
     csmdepth.geom.glsl \
     csmdepth.vert.glsl \
