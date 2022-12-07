@@ -243,6 +243,7 @@ main() {
 
 #if 1
   vec3 L0 = textureBicubic(lightmapTextureL0, l_texcoordLightmap).rgb;
+  vec3 diffuseLighting;
   vec3 L0factor = (L0 / 0.282095) * 0.488603;
   vec3 L1y = textureBicubic(lightmapTextureL1y, l_texcoordLightmap).rgb * 2 - 1;
   L1y *= L0factor;
@@ -250,7 +251,6 @@ main() {
   L1z *= L0factor;
   vec3 L1x = textureBicubic(lightmapTextureL1x, l_texcoordLightmap).rgb * 2 - 1;
   L1x *= L0factor;
-  vec3 diffuseLighting;
   if (hasSSBump()) {
     diffuseLighting = L0 +
       L1x * worldNormalUnnormalized.x +
@@ -259,10 +259,6 @@ main() {
   } else {
     diffuseLighting = L0 + L1x * worldNormal.x + L1y * worldNormal.y + L1z * worldNormal.z;
   }
-  diffuseLighting = max(vec3(0.0), diffuseLighting);
-
-  //o_color = vec4(diffuseLighting, alpha);
-  //return;
 
 #else
   vec3 diffuseLighting = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 0)).rgb;
