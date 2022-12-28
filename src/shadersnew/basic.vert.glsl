@@ -15,6 +15,7 @@ uniform vec4 p3d_ColorScale;
 
 in vec4 vertex;
 in vec4 p3d_Color;
+in vec3 p3d_Normal;
 
 #if BASETEXTURE
 uniform mat4 p3d_TextureTransform[1];
@@ -40,13 +41,12 @@ const mat4 scale_mat = mat4(vec4(0.5, 0.0, 0.0, 0.0),
                             vec4(0.5, 0.5, 0.5, 1.0));
 uniform vec3 wspos_view;
 out vec3 l_worldVertexToEye;
-out vec3 l_worldNormal;
-in vec3 p3d_Normal;
 #endif
 
 out vec4 l_vertex_color;
 out vec4 l_eye_position;
 out vec4 l_world_position;
+out vec3 l_worldNormal;
 
 /**
  *
@@ -78,9 +78,10 @@ main() {
   l_eye_position = eye_pos;
   l_world_position = world_pos;
 
+  l_worldNormal = normalize(mat3(p3d_ModelMatrix) * p3d_Normal);
+
 #if PLANAR_REFLECTION
   l_texcoordReflection = scale_mat * gl_Position;
   l_worldVertexToEye = wspos_view - world_pos.xyz;
-  l_worldNormal = normalize(mat3(p3d_ModelMatrix) * p3d_Normal);
 #endif
 }

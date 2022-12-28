@@ -9,6 +9,16 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "shadersnew/common_frag.inc.glsl"
 
+// Uniforms for volume tiled lighting.
+uniform samplerBuffer p3d_StaticLightBuffer;
+uniform samplerBuffer p3d_DynamicLightBuffer;
+uniform isamplerBuffer p3d_LightListBuffer;
+uniform vec2 p3d_LensNearFar;
+uniform vec2 p3d_WindowSize;
+uniform vec3 p3d_LightLensDiv;
+uniform vec2 p3d_LightLensZScaleBias;
+#include "shadersnew/common_clustered_lighting.inc.glsl"
+
 #if BASETEXTURE
 in vec2 l_texcoord;
 uniform sampler2D base_texture_sampler;
@@ -19,6 +29,7 @@ uniform vec4 p3d_TexAlphaOnly;
 in vec4 l_vertex_color;
 in vec4 l_eye_position;
 in vec4 l_world_position;
+in vec3 l_worldNormal;
 
 out vec4 o_color;
 
@@ -52,7 +63,6 @@ layout(constant_id = 3) const int NUM_CLIP_PLANES = 0;
 in vec4 l_texcoordReflection;
 uniform sampler2D reflectionSampler;
 in vec3 l_worldVertexToEye;
-in vec3 l_worldNormal;
 #endif
 
 /**
@@ -69,18 +79,52 @@ main() {
   }
 #endif
 
-  o_color = vec4(1, 1, 1, 1);
+  vec3 albedo = vec3(1, 1, 1);
+  float alpha = 1.0;
 #if BASETEXTURE
-  o_color *= texture(base_texture_sampler, l_texcoord);
+  vec4 base_sample = texture(base_texture_sampler, l_texcoord);
+  base_sample += p3d_TexAlphaOnly;
+  albedo = base_sample.rgb;
+  alpha = base_sample.a;
 #endif
-  o_color += p3d_TexAlphaOnly;
-  o_color *= l_vertex_color;
+
+  albedo *= l_vertex_color.rgb;
+  alpha *= l_vertex_color.a;
 
 #if ALPHA_TEST
-  if (!do_alpha_test(o_color.a, ALPHA_TEST_MODE, ALPHA_TEST_REF)) {
+  if (!do_alpha_test(alpha, ALPHA_TEST_MODE, ALPHA_TEST_REF)) {
     discard;
   }
 #endif
+
+  vec3 diffuse = vec3(1);
+  OPEN_ITERATE_CLUSTERED_LIGHTS()
+    fetch_cluster_light(light_index, p3d_StaticLightBuffer, p3d_DynamicLightBuffer, light);
+    vec3 L = light.pos - l_world_position.xyz;
+    float dist = length(L);
+    L = normalize(L);
+
+    float NdotL = max(0.0, dot(L, normalize(l_worldNormal)));
+
+    float atten = 1.0 / (light.constant_atten + light.linear_atten * dist + light.quadratic_atten * dist * dist);
+    if (light.atten_radius > 0) {
+      atten *= 1.0 - (dist / light.atten_radius);
+    }
+    atten = max(0.0, atten);
+
+    if (light.type == LIGHT_TYPE_SPOT) {
+      float cosTheta = clamp(dot(L, -light.direction), 0, 1);
+      float spotAtten = (cosTheta - light.spot_stopdot2) * light.spot_oodot;
+      spotAtten = max(0.0001, spotAtten);
+      spotAtten = pow(spotAtten, light.spot_exponent);
+      spotAtten = clamp(spotAtten, 0, 1);
+      atten *= spotAtten;
+    }
+
+    diffuse += light.color * atten * NdotL;
+  CLOSE_ITERATE_CLUSTERED_LIGHTS()
+
+  diffuse *= albedo;
 
 #if PLANAR_REFLECTION
   // Sample planar reflection.
@@ -94,8 +138,10 @@ main() {
   fresnel *= fresnel;
 
   // Add onto final color.
-  o_color.rgb += refl * fresnel;
+  diffuse += refl * fresnel;
 #endif
+
+  o_color = vec4(diffuse, alpha);
 
 #if FOG
   vec3 fog_color;
