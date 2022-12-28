@@ -58,6 +58,16 @@ in vec4 l_cascadeCoords[4];
 layout(constant_id = 6) const int NUM_CASCADES = 0;
 #endif // HAS_SHADOW_SUNLIGHT
 
+// Uniforms for volume tiled lighting.
+uniform samplerBuffer p3d_StaticLightBuffer;
+uniform samplerBuffer p3d_DynamicLightBuffer;
+uniform isamplerBuffer p3d_LightListBuffer;
+uniform vec2 p3d_LensNearFar;
+uniform vec2 p3d_WindowSize;
+uniform vec3 p3d_LightLensDiv;
+uniform vec2 p3d_LightLensZScaleBias;
+#include "shadersnew/common_clustered_lighting.inc.glsl"
+
 #endif // DIRECT_LIGHT
 
 #if AMBIENT_LIGHT == 1
@@ -257,19 +267,15 @@ void specularAndRimTerms(inout vec3 specularLighting, inout vec3 rimLighting,
 }
 
 // Accumulates lighting for the given light index.
-void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, inout vec3 rimLighting,
+void doLight(in ClusterLightData light, inout vec3 diffuseLighting, inout vec3 specularLighting, inout vec3 rimLighting,
              vec3 worldNormal, vec3 worldPos, vec3 eyeDir, float specularExponent, float rimExponent,
              float fresnel) {
 
-  bool isDirectional = p3d_LightSource[i].color.w == 1.0;
-  bool isSpot = p3d_LightSource[i].direction.w == 1.0;
-  bool isPoint = (!isDirectional && !isSpot);
-
-  vec3 lightColor = p3d_LightSource[i].color.rgb;
-  vec3 lightPos = p3d_LightSource[i].position.xyz;
-  vec3 lightDir = normalize(p3d_LightSource[i].direction.xyz);
-  vec3 attenParams = p3d_LightSource[i].attenuation;
-  vec4 spotParams = p3d_LightSource[i].spotParams;
+  vec3 lightColor = light.color;
+  vec3 lightPos = light.pos;
+  vec3 lightDir = normalize(light.direction);
+  vec3 attenParams = vec3(light.constant_atten, light.linear_atten, light.quadratic_atten);
+  vec4 spotParams = vec4(light.spot_exponent, light.spot_stopdot, light.spot_stopdot2, light.spot_oodot);
   float lightDist = 0.0;
   float lightAtten = 1.0;
 
@@ -278,7 +284,7 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
   float fNdotL;
 
   vec3 L;
-  if (isDirectional) {
+  if (light.type == LIGHT_TYPE_DIRECTIONAL) {
     L = lightDir;
 
     fNdotL = max(0.0, dot(L, worldNormal));
@@ -296,8 +302,10 @@ void doLight(int i, inout vec3 diffuseLighting, inout vec3 specularLighting, ino
 
     //if (fNdotL > 0.0) {
       lightAtten = 1.0 / (attenParams.x + attenParams.y * lightDist + attenParams.z * (lightDist * lightDist));
+      lightAtten *= (light.atten_radius > 0.0) ? (1.0 - (lightDist / light.atten_radius)) : 1.0;
+      lightAtten = max(0.0, lightAtten);
 
-      if (isSpot) {
+      if (light.type == LIGHT_TYPE_SPOT) {
         // Spotlight cone attenuation.
         float cosTheta = clamp(dot(L, -lightDir), 0, 1);
         float spotAtten = (cosTheta - spotParams.z) * spotParams.w;
@@ -331,9 +339,34 @@ void doLighting(inout vec3 diffuseLighting, inout vec3 specularLighting, inout v
                 float fresnel, int numLights) {
   // Start diffuse at ambient color.
   for (int i = 0; i < numLights; i++) {
-    doLight(i, diffuseLighting, specularLighting, rimLighting, worldNormal, worldPos,
+    ClusterLightData light;
+    light.color = p3d_LightSource[i].color.rgb;
+    light.pos = p3d_LightSource[i].position.xyz;
+    light.direction = p3d_LightSource[i].direction.xyz;
+    light.constant_atten = p3d_LightSource[i].attenuation.x;
+    light.linear_atten = p3d_LightSource[i].attenuation.y;
+    light.quadratic_atten = p3d_LightSource[i].attenuation.z;
+    light.atten_radius = 0.0;
+    light.spot_exponent = p3d_LightSource[i].spotParams.x;
+    light.spot_stopdot = p3d_LightSource[i].spotParams.y;
+    light.spot_stopdot2 = p3d_LightSource[i].spotParams.z;
+    light.spot_oodot = p3d_LightSource[i].spotParams.w;
+    if (p3d_LightSource[i].color.w == 1.0) {
+      light.type = LIGHT_TYPE_DIRECTIONAL;
+    } else if (p3d_LightSource[i].direction.w == 1.0) {
+      light.type = LIGHT_TYPE_SPOT;
+    } else {
+      light.type = LIGHT_TYPE_POINT;
+    }
+    doLight(light, diffuseLighting, specularLighting, rimLighting, worldNormal, worldPos,
             eyeDir, specularExponent, rimExponent, fresnel);
   }
+
+  OPEN_ITERATE_CLUSTERED_LIGHTS()
+    fetch_cluster_light(light_index, p3d_StaticLightBuffer, p3d_DynamicLightBuffer, light);
+    doLight(light, diffuseLighting, specularLighting, rimLighting, worldNormal, worldPos,
+            eyeDir, specularExponent, rimExponent, fresnel);
+  CLOSE_ITERATE_CLUSTERED_LIGHTS()
 }
 
 #endif // DIRECT_LIGHT

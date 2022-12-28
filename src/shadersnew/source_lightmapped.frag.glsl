@@ -20,6 +20,16 @@
 #include "shadersnew/common.inc.glsl"
 #include "shadersnew/common_shadows_frag.inc.glsl"
 
+// Uniforms for volume tiled lighting.
+uniform samplerBuffer p3d_StaticLightBuffer;
+uniform samplerBuffer p3d_DynamicLightBuffer;
+uniform isamplerBuffer p3d_LightListBuffer;
+uniform vec2 p3d_LensNearFar;
+uniform vec2 p3d_WindowSize;
+uniform vec3 p3d_LightLensDiv;
+uniform vec2 p3d_LightLensZScaleBias;
+#include "shadersnew/common_clustered_lighting.inc.glsl"
+
 uniform sampler2D baseTexture;
 #if BASETEXTURE2
 uniform sampler2D baseTexture2;
@@ -264,8 +274,9 @@ main() {
   vec3 diffuseLighting = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 0)).rgb;
 #endif
 
-#if SUNLIGHT
   float NdotL;
+
+#if SUNLIGHT
   if (hasSSBump()) {
     // Crazy SSBump NdotL method.
     vec3 toLight = normalize(p3d_LightSource[0].direction.xyz);
@@ -292,6 +303,52 @@ main() {
     diffuseLighting += light;
   }
 #endif // SUNLIGHT
+
+  OPEN_ITERATE_CLUSTERED_LIGHTS()
+    if (light_index < 0) {
+      // Dynamic lights only.
+      fetch_cluster_light(light_index, p3d_StaticLightBuffer, p3d_DynamicLightBuffer, light);
+
+      vec3 toLight;
+      float dist;
+      if (light.type == LIGHT_TYPE_DIRECTIONAL) {
+        toLight = light.direction;
+        dist = 0;
+      } else {
+        toLight = light.pos - l_worldPos.xyz;
+        dist = length(toLight);
+        toLight = normalize(toLight);
+      }
+      if (hasSSBump()) {
+        // Crazy SSBump NdotL method.
+        vec3 tangentToLight;
+        tangentToLight.x = dot(toLight, worldTangent);
+        tangentToLight.y = dot(toLight, worldBinormal);
+        tangentToLight.z = dot(toLight, origWorldNormal);
+        tangentToLight = normalize(tangentToLight);
+        NdotL = clamp(normalTexel.x * dot(tangentToLight, g_localBumpBasis[0]) +
+                      normalTexel.y * dot(tangentToLight, g_localBumpBasis[1]) +
+                      normalTexel.z * dot(tangentToLight, g_localBumpBasis[2]), 0.0, 1.0);
+      } else {
+        NdotL = max(0.0, dot(worldNormal, toLight));
+      }
+      float atten = 1.0;
+      if (light.type != LIGHT_TYPE_DIRECTIONAL) {
+        atten = 1.0 / (light.constant_atten + light.linear_atten * dist + light.quadratic_atten * dist * dist);
+        atten *= (light.atten_radius > 0.0) ? (1.0 - (dist / light.atten_radius)) : 1.0;
+        atten = max(0.0, atten);
+        if (light.type == LIGHT_TYPE_SPOT && atten > 0.0) {
+          float cosTheta = clamp(dot(toLight, -light.direction), 0, 1);
+          float spotAtten = (cosTheta - light.spot_stopdot2) * light.spot_oodot;
+          spotAtten = max(0.0001, spotAtten);
+          spotAtten = pow(spotAtten, light.spot_exponent);
+          spotAtten = clamp(spotAtten, 0, 1);
+          atten *= spotAtten;
+        }
+      }
+      diffuseLighting += light.color * NdotL * atten;
+    }
+  CLOSE_ITERATE_CLUSTERED_LIGHTS()
 
 #if SELFILLUM
   diffuseLighting += selfIllumTint * albedo * baseSample.a;
