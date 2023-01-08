@@ -90,11 +90,6 @@ main() {
     vec3 ray_dir = normal_mat * generate_hemisphere_cosine_weighted_direction(noise);
     ray_dir = normalize(ray_dir);
 
-    float dt = dot(normal, ray_dir);
-    if (dt <= 0.001) {
-      continue;
-    }
-
     vec3 barycentric;
 
     vec3 light = vec3(0);
@@ -112,7 +107,6 @@ main() {
         if (u_bounce == 0) {
           light = u_sky_color;
         }
-        active_rays += 1.0;
 
       } else if (tri.page >= 0) {
         // If lightmapped triangle (not just an occluder).
@@ -123,7 +117,6 @@ main() {
 
         // Get reflectivity at the luxel we hit.
         light = textureLod(luxel_reflectivity, uvw, 0.0).rgb;
-        active_rays += 1.0;
 
       } else if (tri.page < -1) {
         // Vertex-lit triangle.  Grab reflectivity of 3 triangle vertices
@@ -143,9 +136,10 @@ main() {
         vec3 refl2 = texelFetch(vtx_reflectivity, coords, 0).rgb;
 
         light = refl0 * barycentric.x + refl1 * barycentric.y + refl2 * barycentric.z;
-        active_rays += 1.0;
       }
     }
+
+    active_rays += 1.0;
 
     gathered += light;
   }
