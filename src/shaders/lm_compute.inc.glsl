@@ -164,11 +164,6 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias
     KDLeaf leaf;
     get_kd_leaf(~node_index, leaf);
 
-    // Determine the node or leaf the ray will visit next.
-    int exit_side;
-    t_entry = get_kd_neighbor_new(leaf, ray_start, ray_recip_dir, exit_side);
-    node_index = leaf.neighbors[exit_side];
-
     // Check intersection with triangles contained in current leaf node.
     uint last_tri = (leaf.first_triangle + leaf.num_triangles);
     for (uint i = leaf.first_triangle; i < last_tri; ++i) {
@@ -250,6 +245,11 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias
         }
       }
     }
+
+    // Determine the node or leaf the ray will visit next.
+    int exit_side;
+    t_entry = get_kd_neighbor_new(leaf, ray_start, ray_recip_dir, exit_side);
+    node_index = leaf.neighbors[exit_side];
   }
 
   return hit;
