@@ -70,8 +70,10 @@ main() {
 
   float active_rays = 0.0;
 
-  LightmapTri tri;
-  LightmapVertex vert0, vert1, vert2;
+  HitData hit_data;
+
+  int start_node_index;
+  get_kd_leaf_from_point(position, start_node_index);
 
 #if 1
   uint noise = random_seed(ivec3(0, probe_index, 49502741));
@@ -84,29 +86,35 @@ main() {
 
     ray_dir = normalize(ray_dir);
 
-    vec3 barycentric;
     vec3 light = vec3(0.0);
 
-    uint trace_result = ray_cast(position + ray_dir * u_bias, position + ray_dir * 9999999,
-                                 u_bias, barycentric, tri, vert0, vert1, vert2, luxel_albedo);
+    active_rays += 1.0;
+
+    uint trace_result = ray_cast(position, position + ray_dir * 9999999,
+                                 u_bias, luxel_albedo,
+                                 start_node_index, hit_data);
     if (trace_result == RAY_FRONT) {
-      if ((tri.flags & TRIFLAGS_SKY) != 0) {
+
+      if ((hit_data.tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky.  Bring in sky ambient color.
         light = u_sky_color;
 
-      } else if (tri.page >= 0) {
-        vec2 uv0 = vert0.uv;
-        vec2 uv1 = vert1.uv;
-        vec2 uv2 = vert2.uv;
-        vec3 uvw = vec3(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2, float(tri.page));
+      } else if (hit_data.tri.page >= 0) {
 
-        vec3 L0 = textureLod(luxel_light, vec3(uvw.xy, float(tri.page * 4)), 0.0).rgb;
+        vec2 uv0 = hit_data.vert0.uv;
+        vec2 uv1 = hit_data.vert1.uv;
+        vec2 uv2 = hit_data.vert2.uv;
+        vec3 uvw = vec3(hit_data.barycentric.x * uv0 + hit_data.barycentric.y * uv1 + hit_data.barycentric.z * uv2, float(hit_data.tri.page));
+
+        vec3 L0 = textureLod(luxel_light, vec3(uvw.xy, float(hit_data.tri.page * 4)), 0.0).rgb;
         light = L0 / 0.282095; // reverse L0 coefficient
         light += textureLod(luxel_light_dynamic, uvw, 0.0).rgb;
+        // Modulate by surface albedo, because the incoming light to the probe
+        // is the incoming light to the surface, reflected to the probe (so also modulated
+        // by the surface albedo).
+        light *= textureLod(luxel_albedo, uvw, 0.0).rgb;
         //light = vec3(1);
       }
-
-      active_rays += 1.0;
     }
 
     {

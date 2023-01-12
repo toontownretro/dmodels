@@ -26,10 +26,15 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 // Subsequent bounces contain gathered light from previous bounce.
 uniform sampler2DArray luxel_reflectivity;
 // Gathered light.
-layout(rgba32f) uniform writeonly image2DArray luxel_gathered;
+layout(rgba32f) uniform image2DArray luxel_gathered;
+layout(rgba32f) uniform image2DArray luxel_sh_gathered;
 // Contains just direct light at start, gathered added onto this.
 layout(rgba32f) uniform image2DArray luxel_light;
-layout(rgba32f) uniform image1D bounce_total;
+
+// This stores the total amount of light we added on this bounce.
+// This is read back on the CPU to determine when the lighting has
+// stabilized.
+layout(r32ui) uniform uimage1D feedback_total_add;
 
 uniform sampler2DArray luxel_albedo;
 uniform sampler2DArray luxel_normal;
@@ -37,6 +42,7 @@ uniform sampler2DArray luxel_position;
 
 // Also reflect light off of vertex-lit geometry.
 uniform sampler2D vtx_reflectivity;
+uniform sampler2D vtx_albedo;
 // X: LightmapVertex index of first vertex-lit vertex.
 // Y: Width of the vertex palette.
 uniform uvec2 u_vtx_lit_info;
@@ -45,9 +51,10 @@ uniform ivec4 u_palette_size_page_bounce;
 #define u_palette_size (u_palette_size_page_bounce.xy)
 #define u_palette_page (u_palette_size_page_bounce.z)
 #define u_bounce (u_palette_size_page_bounce.w)
-uniform ivec2 u_region_ofs;
 uniform vec2 u_bias_;
 #define u_bias (u_bias_.x)
+
+uniform ivec2 u_region_ofs;
 
 uniform ivec3 u_ray_params;
 #define u_ray_from (u_ray_params.x)
@@ -66,14 +73,13 @@ main() {
     return;
   }
 
-  //memoryBarrier();
-
   ivec3 palette_coord = ivec3(palette_pos, u_palette_page);
 
   vec3 normal = texelFetch(luxel_normal, palette_coord, 0).xyz;
   if (length(normal) < 0.5) {
     return;
   }
+
   normal = normalize(normal);
 
   vec3 position = texelFetch(luxel_position, palette_coord, 0).xyz;
@@ -88,13 +94,15 @@ main() {
     is_z = true;
   }
 
+  int start_node_index;
+  get_kd_leaf_from_point(position + normal * u_bias, start_node_index);
+
   vec3 v0 = is_z ? vec3(1, 0, 0) : vec3(0, 0, 1);
   vec3 tangent = normalize(cross(v0, normal));
   vec3 bitangent = normalize(cross(tangent, normal));
   mat3 normal_mat = mat3(tangent, bitangent, normal);
 
-  LightmapTri tri;
-  LightmapVertex vert0, vert1, vert2;
+  HitData hit_data;
 
   vec4 sh_accum[4] = vec4[](
     vec4(0.0, 0.0, 0.0, 1.0),
@@ -103,12 +111,20 @@ main() {
     vec4(0.0, 0.0, 0.0, 1.0));
 
   vec3 gathered = vec3(0);
+  float total_dot = 0.0;
   float active_rays = 0.0;
-  //float total_dot = 0.0;
   uint noise = random_seed(ivec3(u_ray_from, palette_pos));
   for (uint i = u_ray_from; i < u_ray_to; i++) {
     vec3 ray_dir = normal_mat * generate_hemisphere_cosine_weighted_direction(noise);
     ray_dir = normalize(ray_dir);
+
+    float dt = dot(normal, ray_dir);
+    if (dt <= 0.0) {
+      continue;
+    }
+
+    total_dot += dt;
+    active_rays += 1.0;
 
     vec3 barycentric;
 
@@ -116,50 +132,50 @@ main() {
     uint trace_result = ray_cast(position + normal * u_bias,
                                  position + ray_dir * 9999999,
                                  u_bias,
-                                 barycentric, tri, vert0, vert1, vert2, luxel_albedo);
+                                 luxel_albedo,
+                                 start_node_index,
+                                 hit_data);
 
     if (trace_result == RAY_FRONT) {
 
       // Hit a triangle.
-
-      if ((tri.flags & TRIFLAGS_SKY) != 0) {
+      if ((hit_data.tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky.  Bring in sky ambient color, but only on the first bounce.
         if (u_bounce == 0) {
           light = u_sky_color;
         }
 
-      } else if (tri.page >= 0) {
+      } else if (hit_data.tri.page >= 0) {
+
         // If lightmapped triangle (not just an occluder).
-        vec2 uv0 = vert0.uv;
-        vec2 uv1 = vert1.uv;
-        vec2 uv2 = vert2.uv;
-        vec3 uvw = vec3(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2, float(tri.page));
+        vec2 uv0 = hit_data.vert0.uv;
+        vec2 uv1 = hit_data.vert1.uv;
+        vec2 uv2 = hit_data.vert2.uv;
+        vec3 uvw = vec3(hit_data.barycentric.x * uv0 + hit_data.barycentric.y * uv1 + hit_data.barycentric.z * uv2, float(hit_data.tri.page));
 
         // Get reflectivity at the luxel we hit.
         light = textureLod(luxel_reflectivity, uvw, 0.0).rgb;
 
-      } else if (tri.page < -1) {
+      } else if (hit_data.tri.page < -1) {
         // Vertex-lit triangle.  Grab reflectivity of 3 triangle vertices
         // and interpolate with barycentric coordinates.
         ivec2 coords;
 
-        coords.y = int((tri.indices.x - u_vtx_lit_info.x) / u_vtx_lit_info.y);
-        coords.x = int((tri.indices.x - u_vtx_lit_info.x) % u_vtx_lit_info.y);
+        coords.y = int((hit_data.tri.indices.x - u_vtx_lit_info.x) / u_vtx_lit_info.y);
+        coords.x = int((hit_data.tri.indices.x - u_vtx_lit_info.x) % u_vtx_lit_info.y);
         vec3 refl0 = texelFetch(vtx_reflectivity, coords, 0).rgb;
 
-        coords.y = int((tri.indices.y - u_vtx_lit_info.x) / u_vtx_lit_info.y);
-        coords.x = int((tri.indices.y - u_vtx_lit_info.x) % u_vtx_lit_info.y);
+        coords.y = int((hit_data.tri.indices.y - u_vtx_lit_info.x) / u_vtx_lit_info.y);
+        coords.x = int((hit_data.tri.indices.y - u_vtx_lit_info.x) % u_vtx_lit_info.y);
         vec3 refl1 = texelFetch(vtx_reflectivity, coords, 0).rgb;
 
-        coords.y = int((tri.indices.z - u_vtx_lit_info.x) / u_vtx_lit_info.y);
-        coords.x = int((tri.indices.z - u_vtx_lit_info.x) % u_vtx_lit_info.y);
+        coords.y = int((hit_data.tri.indices.z - u_vtx_lit_info.x) / u_vtx_lit_info.y);
+        coords.x = int((hit_data.tri.indices.z - u_vtx_lit_info.x) % u_vtx_lit_info.y);
         vec3 refl2 = texelFetch(vtx_reflectivity, coords, 0).rgb;
 
-        light = refl0 * barycentric.x + refl1 * barycentric.y + refl2 * barycentric.z;
+        light = refl0 * hit_data.barycentric.x + refl1 * hit_data.barycentric.y + refl2 * hit_data.barycentric.z;
       }
     }
-
-    active_rays += 1.0;
 
     gathered += light;
 
@@ -174,35 +190,38 @@ main() {
     }
   }
 
-  if (active_rays > 0) {
-    gathered /= active_rays;
+  // Store gathered light.
+  vec4 running_total = imageLoad(luxel_gathered, palette_coord);
+  gathered += running_total.rgb;
+  total_dot += running_total.a;
+  for (uint j = 0; j < 4; ++j) {
+    sh_accum[j].rgb += imageLoad(luxel_sh_gathered, ivec3(palette_pos, u_palette_page * 4 + j)).rgb;
+  }
+  if (u_ray_to == u_ray_count) {
+    // If this is the final ray pass for this bounce, modulate the total
+    // light gathered by my surface's albedo, for rays in the next bounce.
+    gathered /= total_dot;
 
+    float gathered_luminance = max(gathered.r, max(gathered.g, gathered.b));
+    imageAtomicMax(feedback_total_add, 0, uint(gathered_luminance * 10000));
+
+    vec3 surf_reflectivity = min(texelFetch(luxel_albedo, palette_coord, 0).rgb, vec3(0.99));
+
+    // Accumulate what we gathered onto total incoming light to this luxel.
+    for (int i = 0; i < 4; ++i) {
+      vec3 curr_light_total;
+      curr_light_total = imageLoad(luxel_light, ivec3(palette_pos, u_palette_page * 4 + i)).rgb;
+      sh_accum[i].rgb /= total_dot;
+      imageStore(luxel_light, ivec3(palette_pos, u_palette_page * 4 + i), vec4(curr_light_total + sh_accum[i].rgb, 1.0));
+    }
+
+    imageStore(luxel_gathered, palette_coord, vec4(gathered * surf_reflectivity, 1.0));
+
+  } else {
+    // Bounce accumulation.
+    imageStore(luxel_gathered, palette_coord, vec4(gathered, total_dot));
     for (uint j = 0; j < 4; ++j) {
-      sh_accum[j].rgb /= active_rays;
+      imageStore(luxel_sh_gathered, ivec3(palette_pos, u_palette_page * 4 + j), vec4(sh_accum[j].rgb, 1.0));
     }
   }
-
-  // Store light gathered from this bounce, will be reflected in next bounce.
-  imageStore(luxel_gathered, palette_coord, vec4(gathered, 1.0));
-
-#if 1
-  // Accumulate onto total light.
-  for (int i = 0; i < 4; ++i) {
-    vec3 curr_light_total;
-    //if (u_bounce == 0) {
-    //  curr_light_total = vec3(0.0);
-    //} else {
-      curr_light_total = imageLoad(luxel_light, ivec3(palette_pos, u_palette_page * 4 + i)).rgb;
-    //}
-    imageStore(luxel_light, ivec3(palette_pos, u_palette_page * 4 + i), vec4(curr_light_total + sh_accum[i].rgb, 1.0));
-  }
-#else
-  vec3 curr_light_total;
-  //if (u_bounce == 0) {
-  //  curr_light_total = vec3(0.0);
-  //} else {
-    curr_light_total = imageLoad(luxel_light, ivec3(palette_pos, u_palette_page * 4)).rgb;
-  //}
-  imageStore(luxel_light, ivec3(palette_pos, u_palette_page * 4), vec4(curr_light_total + gathered, 1.0));
-#endif
 }

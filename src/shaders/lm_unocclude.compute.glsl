@@ -67,21 +67,21 @@ main() {
   vec3 bitangent = normalize(cross(tangent, face_normal));
   vec3 base_pos = vertex_pos + face_normal * u_bias; // Raise a bit.
 
-  LightmapTri tri;
-  LightmapVertex vert0, vert1, vert2;
+  int start_node_index;
+  get_kd_leaf_from_point(base_pos, start_node_index);
+
+  HitData hit_data;
 
   vec3 rays[4] = vec3[4](tangent, bitangent, -tangent, -bitangent);
   float min_d = 1e20;
   for (int i = 0; i < 4; i++) {
     vec3 ray_to = base_pos + rays[i] * texel_size;
-    float d;
-    vec3 norm;
-    vec3 bary;
 
-    if (ray_cast(base_pos, ray_to, u_bias, bary, tri, vert0, vert1, vert2, d, norm) == RAY_BACK) {
-      if (d < min_d) {
-        vertex_pos = base_pos + rays[i] * d + norm * u_bias * 160;
-        min_d = d;
+    if (ray_cast(base_pos, ray_to, u_bias,
+                 start_node_index, hit_data) == RAY_BACK) {
+      if (hit_data.hit_dist < min_d) {
+        vertex_pos = base_pos + rays[i] * hit_data.hit_dist + hit_data.normal * u_bias * 160;
+        min_d = hit_data.hit_dist;
       }
     }
   }

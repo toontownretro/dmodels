@@ -82,7 +82,10 @@ main() {
   );
 
   LightmapTri tri;
-  LightmapVertex vert0, vert1, vert2;
+  HitData hit_data;
+
+  int start_node_index;
+  get_kd_leaf_from_point(position + normal * u_bias, start_node_index);
 
   uint light_count = uint(get_num_lightmap_lights());
   for (uint i = 0; i < light_count; i++) {
@@ -116,11 +119,11 @@ main() {
     }
 
     float NdotL = clamp(dot(normal, L), 0.0, 1.0);
-    attenuation *= NdotL;
+    //attenuation *= NdotL;
 
-    if (attenuation == 0.0) {
-      continue;
-    }
+    //if (attenuation == 0.0) {
+    //  continue;
+    //}
 
     //if (attenuation <= 0.00001) {
     //  continue;
@@ -128,11 +131,12 @@ main() {
 
     vec3 bary;
 
-    uint ret = ray_cast(position + (normal * u_bias), light_pos, u_bias, bary,
-                          tri, vert0, vert1, vert2, luxel_albedo);
+    uint ret = ray_cast(position + (normal * u_bias), light_pos, u_bias, luxel_albedo, start_node_index, hit_data);
 
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
-      if ((ret != RAY_MISS) && ((tri.flags & TRIFLAGS_SKY) != 0)) {
+      //get_lightmap_tri(hit_data.triangle, tri);
+
+      if ((ret != RAY_MISS) && ((hit_data.tri.flags & TRIFLAGS_SKY) != 0)) {
         // Hit sky, sun light is visible.
         ret = RAY_MISS;
 
@@ -172,7 +176,7 @@ main() {
 
     } else*/ if (ret == RAY_MISS) {
       if (light.bake_direct == 1) {
-        static_light += contrib;
+        static_light += contrib * NdotL;
 
         float c[4] = float[](
           0.282095, //l0
@@ -186,7 +190,7 @@ main() {
         }
 
       } else {
-        dynamic_light += contrib;
+        dynamic_light += contrib * NdotL;
       }
     }
   }
@@ -201,8 +205,8 @@ main() {
 #endif
   //
 
-  imageStore(luxel_direct_dynamic, palette_coord, vec4(dynamic_light * albedo + emission, 1.0));
+  imageStore(luxel_direct_dynamic, palette_coord, vec4(dynamic_light, 1.0));
 
   // Reflectivity = ((static light + dynamic light) * albedo) + emission
-  imageStore(luxel_reflectivity, palette_coord, vec4(((dynamic_light + static_light) * albedo) + emission, 1.0));
+  imageStore(luxel_reflectivity, palette_coord, vec4((dynamic_light + static_light) * albedo + emission, 1.0));
 }

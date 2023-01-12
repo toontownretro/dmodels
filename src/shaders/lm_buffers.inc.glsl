@@ -99,15 +99,16 @@ LightmapTri
 get_lightmap_tri(uint i) {
   LightmapTri tri;
   int start = int(i) * 3;
-  vec4 indices_page = texelFetch(triangles, start);
-  tri.indices.x = uint(indices_page.x);
-  tri.indices.y = uint(indices_page.y);
-  tri.indices.z = uint(indices_page.z);
-  tri.page = int(indices_page.w);
+  vec4 indices = texelFetch(triangles, start);
+  tri.indices.x = uint(indices.x);
+  tri.indices.y = uint(indices.y);
+  tri.indices.z = uint(indices.z);
   vec4 mins_flags = texelFetch(triangles, start + 1);
   tri.mins = mins_flags.xyz;
   tri.flags = uint(mins_flags.w);
-  tri.maxs = texelFetch(triangles, start + 2).xyz;
+  vec4 maxs_page = texelFetch(triangles, start + 2);
+  tri.maxs = maxs_page.xyz;
+  tri.page = int(maxs_page.w);
   return tri;
 }
 
@@ -115,38 +116,41 @@ void
 get_lightmap_tri(uint i, out LightmapTri tri) {
   int start = int(i) * 3;
 
-  vec4 indices_page = texelFetch(triangles, start);
-  tri.indices.x = uint(indices_page.x);
-  tri.indices.y = uint(indices_page.y);
-  tri.indices.z = uint(indices_page.z);
-  tri.page = int(indices_page.w);
+  vec4 data = texelFetch(triangles, start);
+  tri.indices.x = uint(data.x);
+  tri.indices.y = uint(data.y);
+  tri.indices.z = uint(data.z);
 
-  vec4 mins_flags = texelFetch(triangles, start + 1);
-  tri.mins = mins_flags.xyz;
-  tri.flags = uint(mins_flags.w);
+  data = texelFetch(triangles, start + 1);
+  tri.mins = data.xyz;
+  tri.flags = uint(data.w);
 
-  tri.maxs = texelFetch(triangles, start + 2).xyz;
+  data = texelFetch(triangles, start + 2);
+  tri.maxs = data.xyz;
+  tri.page = int(data.w);
 }
 
 void
 get_lightmap_tri_0(uint i, inout LightmapTri tri) {
   int start = int(i) * 3;
 
-  vec4 mins_flags = texelFetch(triangles, start + 1);
-  tri.mins = mins_flags.xyz;
-  tri.flags = uint(mins_flags.w);
+  vec4 data = texelFetch(triangles, start + 1);
 
-  tri.maxs = texelFetch(triangles, start + 2).xyz;
+  tri.mins = data.xyz;
+  tri.flags = uint(data.w);
+
+  data = texelFetch(triangles, start + 2);
+  tri.maxs = data.xyz;
+  tri.page = int(data.w);
 }
 
 void
 get_lightmap_tri_1(uint i, inout LightmapTri tri) {
   int start = int(i) * 3;
-  vec4 indices_page = texelFetch(triangles, start);
-  tri.indices.x = uint(indices_page.x);
-  tri.indices.y = uint(indices_page.y);
-  tri.indices.z = uint(indices_page.z);
-  tri.page = int(indices_page.w);
+  vec4 data = texelFetch(triangles, start);
+  tri.indices.x = uint(data.x);
+  tri.indices.y = uint(data.y);
+  tri.indices.z = uint(data.z);
 }
 
 void
@@ -230,134 +234,82 @@ get_lightmap_light(uint i) {
   return light;
 }
 
-#define NEIGHBOR_LEFT 0
-#define NEIGHBOR_RIGHT 1
-#define NEIGHBOR_BACK 2
-#define NEIGHBOR_FRONT 3
-#define NEIGHBOR_BOTTOM 4
-#define NEIGHBOR_TOP 5
+#define NEIGHBOR_LEFT 1
+#define NEIGHBOR_RIGHT 0
+#define NEIGHBOR_BACK 3
+#define NEIGHBOR_FRONT 2
+#define NEIGHBOR_BOTTOM 5
+#define NEIGHBOR_TOP 4
 
 struct KDNode {
   int back_child;
   int front_child;
-
   int axis;
   float dist;
-
-  vec3 mins;
-  vec3 maxs;
-
-  int leaf_num;
 };
 uniform samplerBuffer kd_nodes;
 
+int
+get_num_kd_nodes() {
+  return textureSize(kd_nodes);
+}
+
+void
+get_kd_node(int index, out KDNode node) {
+  vec4 data = texelFetch(kd_nodes, index);
+  node.back_child = int(data.x);
+  node.front_child = int(data.y);
+  node.axis = int(data.z);
+  node.dist = data.w;
+}
+
 struct KDLeaf {
+  vec3 mins;
+  vec3 maxs;
   int neighbors[6];
   uint first_triangle;
   uint num_triangles;
 };
 uniform samplerBuffer kd_leaves;
 
-int
-get_num_kd_nodes() {
-  return textureSize(kd_nodes) / 3;
-}
-
-int get_num_kd_leaves() {
-  return textureSize(kd_leaves) / 2;
-}
-
 void
-get_kd_leaf(int index, out KDLeaf leaf) {
-  int start = int(index) * 2;
+get_kd_leaf(int leaf_index, inout KDLeaf leaf) {
+  int start = leaf_index * 4;
 
   vec4 data = texelFetch(kd_leaves, start);
+  leaf.mins = data.xyz;
+
+  data = texelFetch(kd_leaves, start + 1);
+  leaf.maxs = data.xyz;
+
+  data = texelFetch(kd_leaves, start + 2);
   leaf.neighbors[0] = int(data.x);
   leaf.neighbors[1] = int(data.y);
   leaf.neighbors[2] = int(data.z);
   leaf.neighbors[3] = int(data.w);
 
-  data = texelFetch(kd_leaves, start + 1);
+  data = texelFetch(kd_leaves, start + 3);
   leaf.neighbors[4] = int(data.x);
   leaf.neighbors[5] = int(data.y);
   leaf.first_triangle = uint(data.z);
   leaf.num_triangles = uint(data.w);
 }
 
-void
-get_kd_node(int index, out KDNode node) {
-  int start = index * 3;
-
-  vec4 children_axis_dist = texelFetch(kd_nodes, start);
-  node.back_child = int(children_axis_dist.x);
-  node.front_child = int(children_axis_dist.y);
-  node.axis = int(children_axis_dist.z);
-  node.dist = children_axis_dist.w;
-
-  vec4 mins_leaf_num = texelFetch(kd_nodes, start + 1);
-  node.mins = mins_leaf_num.xyz;
-  node.leaf_num = int(mins_leaf_num.w);
-
-  node.maxs = texelFetch(kd_nodes, start + 2).xyz;
+uint
+get_num_kd_leaves() {
+  return textureSize(kd_leaves) / 4;
 }
 
-void
-get_kd_node_0(int index, inout KDNode node) {
-  int start = index * 3;
-  vec4 children_axis_dist = texelFetch(kd_nodes, start);
-  node.back_child = int(children_axis_dist.x);
-  node.front_child = int(children_axis_dist.y);
-  node.axis = int(children_axis_dist.z);
-  node.dist = children_axis_dist.w;
-}
-
-void
-get_kd_node_1(int index, inout KDNode node) {
-  int start = index * 3;
-  vec4 mins_leaf_num = texelFetch(kd_nodes, start + 1);
-  node.mins = mins_leaf_num.xyz;
-  node.leaf_num = int(mins_leaf_num.w);
-  node.maxs = texelFetch(kd_nodes, start + 2).xyz;
-}
-
-#define KD_NEIGHBOR_BIAS 0.005
-int
-get_kd_neighbor(in KDNode node, in KDLeaf leaf, in vec3 point) {
-  int closest_neighbor = -1;
-  float closest_dist = 9999999.0;
-
-  float dist = abs(point.y - node.maxs.y);
-  if (dist < closest_dist) {
-    closest_neighbor = leaf.neighbors[NEIGHBOR_FRONT];
-    closest_dist = dist;
-  }
-  dist = abs(point.y - node.mins.y);
-  if (dist < closest_dist) {
-    closest_neighbor = leaf.neighbors[NEIGHBOR_BACK];
-    closest_dist = dist;
-  }
-  dist = abs(point.x - node.mins.x);
-  if (dist < closest_dist) {
-    closest_neighbor = leaf.neighbors[NEIGHBOR_LEFT];
-    closest_dist = dist;
-  }
-  dist = abs(point.x - node.maxs.x);
-  if (dist < closest_dist) {
-    closest_neighbor = leaf.neighbors[NEIGHBOR_RIGHT];
-    closest_dist = dist;
-  }
-  dist = abs(point.z - node.mins.z);
-  if (dist < closest_dist) {
-    closest_neighbor = leaf.neighbors[NEIGHBOR_BOTTOM];
-    closest_dist = dist;
-  }
-  dist = abs(point.z - node.maxs.z);
-  if (dist < closest_dist) {
-    closest_neighbor = leaf.neighbors[NEIGHBOR_TOP];
-    closest_dist = dist;
-  }
-
-  return closest_neighbor;
+float
+get_kd_neighbor_new(in KDLeaf leaf, in vec3 point, in vec3 invDir, out int exitSide) {
+  bvec3 lt = lessThan(invDir, vec3(0.0));
+  vec3 tmax = (mix(leaf.maxs, leaf.mins, lt) - point) * invDir;
+  ivec3 signs = ivec3(lt);
+  vec2 vals;
+  vals = mix(vec2(tmax.y, NEIGHBOR_FRONT + signs.y), vec2(tmax.x, signs.x), vec2(tmax.y > tmax.x));
+  vals = mix(vec2(tmax.z, NEIGHBOR_TOP + signs.z), vec2(vals.x, vals.y), vec2(tmax.z > vals.x));
+  exitSide = int(vals.y);
+  return vals.x;
 }
 
 uniform usamplerBuffer kd_triangles;
@@ -369,5 +321,8 @@ uint get_num_kd_tris() {
 uint get_kd_tri(uint index) {
   return texelFetch(kd_triangles, int(index)).x;
 }
+
+uniform vec3 scene_mins;
+uniform vec3 scene_maxs;
 
 #endif // LM_BUFFERS_INC_GLSL

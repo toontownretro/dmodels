@@ -34,9 +34,9 @@ ray_hits_triangle(vec3 from, vec3 dir, float max_dist, float bias, vec3 p0,
 
 	float n_dot_dir = dot(triangle_normal, dir);
 
-	if (abs(n_dot_dir) < RAY_EPSILON) {
-		return false;
-	}
+	//if (abs(n_dot_dir) < RAY_EPSILON) {
+//		return false;
+	//}
 
 	const vec3 e2 = (p0 - from) / n_dot_dir;
 	const vec3 i = cross(dir, e2);
@@ -46,7 +46,7 @@ ray_hits_triangle(vec3 from, vec3 dir, float max_dist, float bias, vec3 p0,
 	barycentric.x = 1.0 - (barycentric.z + barycentric.y);
 	dist = dot(triangle_normal, e2);
 
-	return (dist >= 0.0) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
+	return abs(n_dot_dir) >= RAY_EPSILON && (dist >= 0.0) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
 }
 
 #define RAY_MISS 0
@@ -65,38 +65,59 @@ bool ray_aabb_test(vec3 mins, vec3 maxs, vec3 origin, vec3 recip_dir, out float 
   float fmin = max(tmin.x, max(tmin.y, tmin.z));
   float fmax = min(tmax.x, min(tmax.y, tmax.z));
 
-  if (fmax < 0.0) {
-    return false;
-  }
+  //if (fmax < 0.0) {
+  //  return false;
+  //}
 
-  if (fmin > fmax) {
-    return false;
-  }
+  //if (fmin > fmax) {
+  //  return false;
+  //}
 
   t_near = max(0.0, fmin);
   t_far = fmax;
 
-  return true;
+  return fmax >= 0 && fmin <= fmax;
 }
+
+void
+get_kd_leaf_from_point(vec3 point, out int node_index) {
+  node_index = 1;
+  while (node_index > 0) {
+    KDNode node;
+    get_kd_node(node_index - 1, node);
+    if (point[node.axis] >= node.dist) {
+      // Traverse front child.
+      node_index = node.front_child;
+    } else {
+      // Traverse back child.
+      node_index = node.back_child;
+    }
+  }
+}
+
+// Note for KD node/leaf indices:
+// 0 indicates a null node/leaf.
+// a <0 index indicates a leaf, index into leaf array is ~index.
+// a >0 index indicates a node. index into node array is (index - 1).
+
+struct HitData {
+  float hit_dist;
+  vec3 normal;
+  vec3 barycentric;
+  uint triangle;
+  LightmapVertex vert0, vert1, vert2;
+  LightmapTri tri;
+};
 
 /**
  *
  */
-uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out LightmapTri tri,
-              out LightmapVertex vert0, out LightmapVertex vert1,
-              out LightmapVertex vert2
+uint ray_cast(vec3 ray_start, vec3 ray_end, float bias
 #ifndef TRACE_NO_ALPHA_TEST
               , in sampler2DArray luxel_albedo_samp
 #endif
-#ifdef TRACE_HIT_DIST
-              , out float o_hit_dist
-#endif
-#ifdef TRACE_NORMAL
-              , out vec3 o_normal
-#endif
+              , int start_index, out HitData hit_data
               ) {
-  KDNode curr_node;
-  KDLeaf leaf;
 
   const float inf = 999999999.0;
 
@@ -105,52 +126,72 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out Lig
   vec3 ray_dir = normalize(ray_vec);
   vec3 ray_recip_dir = 1.0 / ray_dir;
 
-  get_kd_node(0, curr_node);
-
   float t_entry, t_exit;
 
   // Test ray against the root node bounding box, encapsulating the entire world.
   // Get the distances along the ray that the ray enters and exits the box.
-  bool intersects_node_box = ray_aabb_test(curr_node.mins, curr_node.maxs, ray_start, ray_recip_dir, t_entry, t_exit);
-  if (!intersects_node_box || t_entry > 0.0) {
-    return RAY_CROSS;
-  }
+  ray_aabb_test(scene_mins, scene_maxs, ray_start, ray_recip_dir, t_entry, t_exit);
 
   uint hit = RAY_MISS;
 
   float t_entry_prev = -inf;
 
-  int node_index = 0;
+  int node_index = start_index;
 
-  LightmapTri ttri;
-  LightmapVertex tvert0, tvert1, tvert2;
-
-  while (t_entry < t_exit && t_entry > t_entry_prev) {
+  while (node_index != 0 && t_entry < t_exit && t_entry > t_entry_prev) {
     t_entry_prev = t_entry;
 
     // Find leaf node containing current entry point.
     vec3 p_entry = ray_start + (t_entry * ray_dir);
-    while (curr_node.front_child >= 0 && curr_node.back_child >= 0) {
-      if (p_entry[curr_node.axis] >= curr_node.dist) {
+    while (node_index > 0) {
+      KDNode node;
+      get_kd_node(node_index - 1, node);
+      if (p_entry[node.axis] >= node.dist) {
         // Traverse front child.
-        node_index = curr_node.front_child;
-        get_kd_node_0(curr_node.front_child, curr_node);
+        node_index = node.front_child;
       } else {
         // Traverse back child.
-        node_index = curr_node.back_child;
-        get_kd_node_0(curr_node.back_child, curr_node);
+        node_index = node.back_child;
       }
     }
 
-    // Grab leaf data and node bounding box.
-    get_kd_node_1(node_index, curr_node);
-    get_kd_leaf(curr_node.leaf_num, leaf);
+    // Can this happen?
+    //if (node_index == 0) {
+    //  break;
+    //}
 
-    // We've reached a leaf node.
+    // Reached a leaf, fetch the leaf data.
+    KDLeaf leaf;
+    get_kd_leaf(~node_index, leaf);
+
+    // Determine the node or leaf the ray will visit next.
+    int exit_side;
+    t_entry = get_kd_neighbor_new(leaf, ray_start, ray_recip_dir, exit_side);
+    node_index = leaf.neighbors[exit_side];
+
     // Check intersection with triangles contained in current leaf node.
-    for (uint i = leaf.first_triangle; i < (leaf.first_triangle + leaf.num_triangles); ++i) {
+    uint last_tri = (leaf.first_triangle + leaf.num_triangles);
+    for (uint i = leaf.first_triangle; i < last_tri; ++i) {
       uint tri_index = get_kd_tri(i);
-      get_lightmap_tri_0(tri_index, ttri);
+
+      LightmapTri ttri;
+      get_lightmap_tri(tri_index, ttri);
+
+#if defined(TRACE_MODE_DIRECT)
+      if ((ttri.flags & TRIFLAGS_DONTCASTSHADOWS) != 0) {
+        continue;
+      }
+#elif defined(TRACE_MODE_INDIRECT) || defined(TRACE_MODE_PROBES)
+      if ((ttri.flags & TRIFLAGS_DONTREFLECTLIGHT) != 0) {
+        continue;
+      }
+#endif
+
+#ifdef TRACE_MODE_PROBES
+      if (ttri.page < -1) {
+        continue;
+      }
+#endif
 
       // First check ray the triangle's bounding box.
       vec3 t0 = (ttri.mins - ray_start) * ray_recip_dir;
@@ -162,105 +203,53 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias, out vec3 o_bary, out Lig
         continue;
       }
 
-      get_lightmap_tri_1(tri_index, ttri);
+      LightmapVertex tvert0, tvert1, tvert2;
+      get_lightmap_vertex(ttri.indices.x, tvert0);
+      get_lightmap_vertex(ttri.indices.y, tvert1);
+      get_lightmap_vertex(ttri.indices.z, tvert2);
 
-#ifdef TRACE_MODE_PROBES
-      if (ttri.page < -1) {
+      vec3 normal = normalize(cross(tvert1.position - tvert0.position, tvert2.position - tvert0.position));
+      bool backface = dot(normal, ray_dir) >= 0.0;
+
+#ifdef TRACE_IGNORE_BACKFACE
+      if (backface) {
         continue;
       }
 #endif
-
-      get_lightmap_vertex_0(ttri.indices.x, tvert0);
-      get_lightmap_vertex_0(ttri.indices.y, tvert1);
-      get_lightmap_vertex_0(ttri.indices.z, tvert2);
 
       float hit_dist = inf;
       vec3 barycentric;
       bool ray_hit = ray_hits_triangle(ray_start, ray_dir, ray_len, bias, tvert0.position,
                                        tvert1.position, tvert2.position, hit_dist, barycentric);
       if (ray_hit) {
-        vec3 normal = normalize(cross(tvert1.position - tvert0.position, tvert2.position - tvert0.position));
-        bool backface = dot(normal, ray_dir) >= 0.0;
         if (!backface) {
           hit_dist = max(bias, hit_dist - bias);
         }
         if (hit_dist < t_exit) {
           float alpha = 1.0;
-#if defined(TRACE_MODE_DIRECT)
-          if ((ttri.flags & TRIFLAGS_DONTCASTSHADOWS) != 0) {
-            // Triangle shouldn't block light.  Rays to lights don't hit this
-            // triangle.
-            alpha = 0.0;
-
-          } else
-#elif defined(TRACE_MODE_INDIRECT) || defined(TRACE_MODE_PROBES)
-          if ((ttri.flags & TRIFLAGS_DONTREFLECTLIGHT) != 0) {
-            // Triangle shouldn't reflect light.  Indirect rays don't hit
-            // this triangle.
-            alpha = 0.0;
-
-          } else
-#endif
-#ifdef TRACE_IGNORE_BACKFACE
-
-          if (backface) {
-            alpha = 0.0;
-          } else
-#endif
-          if (ttri.page >= 0) {
-            get_lightmap_vertex_1(ttri.indices.x, tvert0);
-            get_lightmap_vertex_1(ttri.indices.y, tvert1);
-            get_lightmap_vertex_1(ttri.indices.z, tvert2);
 #ifndef TRACE_NO_ALPHA_TEST
-            if ((ttri.flags & TRIFLAGS_TRANSPARENT) != 0) {
-              // Lightmapped triangle with alpha in albedo.  Grab alpha at
-              // ray intersection point.
-              vec3 uvw = vec3(barycentric.x * tvert0.uv + barycentric.y * tvert1.uv + barycentric.z * tvert2.uv, float(ttri.page));
-              alpha = textureLod(luxel_albedo_samp, uvw, 0.0).a;
-            }
-#endif // TRACE_NO_ALPHA_TEST
+          if (ttri.page >= 0 && (ttri.flags & TRIFLAGS_TRANSPARENT) != 0) {
+            // Lightmapped triangle with alpha in albedo.  Grab alpha at
+            // ray intersection point.
+            vec3 uvw = vec3(barycentric.x * tvert0.uv + barycentric.y * tvert1.uv + barycentric.z * tvert2.uv, float(ttri.page));
+            alpha = textureLod(luxel_albedo_samp, uvw, 0.0).a;
           }
+#endif // TRACE_NO_ALPHA_TEST
           if (alpha >= 0.5) {
             hit = backface ? RAY_BACK : RAY_FRONT;
             t_exit = hit_dist;
-#ifdef TRACE_HIT_DIST
-            o_hit_dist = hit_dist;
-#endif
-#ifdef TRACE_NORMAL
-            o_normal = normal;
-#endif
-            o_bary = barycentric;
-            tri = ttri;
-            vert0 = tvert0;
-            vert1 = tvert1;
-            vert2 = tvert2;
+            hit_data.hit_dist = hit_dist;
+            hit_data.normal = normal;
+            hit_data.barycentric = barycentric;
+            hit_data.triangle = tri_index;
+            hit_data.tri = ttri;
+            hit_data.vert0 = tvert0;
+            hit_data.vert1 = tvert1;
+            hit_data.vert2 = tvert2;
           }
         }
       }
     }
-
-    // Compute distance along ray to exit current node.
-    float tmp_t_near, tmp_t_far;
-    intersects_node_box = ray_aabb_test(curr_node.mins, curr_node.maxs, ray_start, ray_recip_dir, tmp_t_near, tmp_t_far);
-    if (intersects_node_box) {
-      // Set t_entry to be the entrance point of the next (neighboring) node.
-      t_entry = tmp_t_far;
-    } else {
-      // Shouldn't be possible.
-      break;
-    }
-
-    // Find the face of the leaf that the exit point is on.
-    // Enter the node neighboring that leaf face.
-    vec3 p_exit = ray_start + (t_entry * ray_dir);
-    node_index = get_kd_neighbor(curr_node, leaf, p_exit);
-
-    // Break if neighboring node not found, meaning we've exited the K-D tree.
-    if (node_index < 0) {
-      break;
-    }
-
-    get_kd_node_0(node_index, curr_node);
   }
 
   return hit;

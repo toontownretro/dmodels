@@ -61,8 +61,10 @@ main() {
   vec3 direct_light = vec3(0.0);
   vec3 dynamic_light = vec3(0.0);
 
-  LightmapTri tri;
-  LightmapVertex vert0, vert1, vert2;
+  HitData hit_data;
+
+  int start_node_index;
+  get_kd_leaf_from_point(position + normal * u_bias, start_node_index);
 
   uint light_count = uint(get_num_lightmap_lights());
   for (uint i = 0; i < light_count; ++i) {
@@ -104,9 +106,10 @@ main() {
 
     vec3 bary;
 
-    uint ret = ray_cast(position + normal * u_bias, light_pos, u_bias, bary, tri, vert0, vert1, vert2, luxel_albedo);
+    uint ret = ray_cast(position + normal * u_bias, light_pos, u_bias, luxel_albedo,
+                        start_node_index, hit_data);
     if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
-      if ((ret != RAY_MISS) && ((tri.flags & TRIFLAGS_SKY) != 0)) {
+      if ((ret != RAY_MISS) && ((hit_data.tri.flags & TRIFLAGS_SKY) != 0)) {
         // Hit sky, sun light is visible.
         ret = RAY_MISS;
       } else {
