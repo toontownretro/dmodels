@@ -8,7 +8,7 @@
 
 /**
  * @file depth.vert.glsl
- * @author lachbr
+ * @author brian
  * @date 2020-12-16
  */
 

@@ -2,7 +2,7 @@
 
 /**
  * @file eyes.vert.glsl
- * @author lachbr
+ * @author brian
  * @date 2021-03-24
  */
 

@@ -9,7 +9,7 @@
  * with this source code in a file named "LICENSE."
  *
  * @file lm_raster.frag.glsl
- * @author lachbr
+ * @author brian
  * @date 2021-09-21
  */
 

@@ -1,6 +1,6 @@
 /**
  * @file common_sequences.inc.glsl
- * @author lachbr
+ * @author brian
  * @date 2020-11-06
  */
 

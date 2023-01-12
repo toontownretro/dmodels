@@ -5,7 +5,7 @@
 
 /**
  * @file csmdepth.vert.glsl
- * @author lachbr
+ * @author brian
  * @date 2020-10-30
  */
 

@@ -9,7 +9,7 @@
  * with this source code in a file named "LICENSE."
  *
  * @file lm_direct.compute.glsl
- * @author lachbr
+ * @author brian
  * @date 2021-09-23
  */
 
