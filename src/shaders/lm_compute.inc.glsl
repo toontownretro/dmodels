@@ -46,7 +46,7 @@ ray_hits_triangle(vec3 from, vec3 dir, float max_dist, float bias, vec3 p0,
 	barycentric.x = 1.0 - (barycentric.z + barycentric.y);
 	dist = dot(triangle_normal, e2);
 
-	return abs(n_dot_dir) >= RAY_EPSILON && (dist >= 0.0) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
+	return abs(n_dot_dir) >= RAY_EPSILON && (dist >= RAY_EPSILON) && (dist < max_dist) && all(greaterThanEqual(barycentric, vec3(0.0)));
 }
 
 #define RAY_MISS 0
@@ -156,9 +156,9 @@ uint ray_cast(vec3 ray_start, vec3 ray_end, float bias
     }
 
     // Can this happen?
-    //if (node_index == 0) {
-    //  break;
-    //}
+    if (node_index == 0) {
+      break;
+    }
 
     // Reached a leaf, fetch the leaf data.
     KDLeaf leaf;
@@ -291,4 +291,111 @@ vec3 generate_hemisphere_cosine_weighted_direction(inout uint noise) {
   float noise2 = randomize(noise) * 2.0 * PI;
 
   return vec3(sqrt(noise1) * cos(noise2), sqrt(noise1) * sin(noise2), sqrt(1.0 - noise1));
+}
+
+float calc_halton(int n, int base) {
+  float r = 0.0;
+  float f = 1.0;
+  while (n > 0) {
+    f = f / float(base);
+    r = r + f * float(n % base);
+    n = int(floor(float(n) / float(base)));
+  }
+  return r;
+}
+
+vec2 sample_halton(int n) {
+  return vec2(calc_halton(n + 1, 2), calc_halton(n + 1, 3));
+}
+
+vec3 halton_hemisphere_direction(int index, int total_rays, vec2 offset) {
+  vec2 uv = sample_halton(index);
+
+  uv.x = fract(uv.x + offset.x);
+  uv.y = fract(uv.y + offset.y);
+
+#if 1
+  float noise1 = uv.x;
+  float noise2 = uv.y * 2.0 * PI;
+
+  return vec3(sqrt(noise1) * cos(noise2), sqrt(noise1) * sin(noise2), sqrt(1.0 - noise1));
+#else
+
+  float cos_theta = uv.x;
+  float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+  float sin_phi, cos_phi;
+  float phi = uv.y * 2 * PI;
+  sin_phi = sin(phi);
+  cos_phi = cos(phi);
+
+  return vec3(cos_phi * sin_theta, sin_phi * sin_theta, cos_theta);
+#endif
+}
+
+mat3
+make_xi_mat(vec2 x) {
+  return mat3(
+    vec3(1.0, 0.0, 0.0),
+    vec3(0, x.x, x.y),
+    vec3(0, -x.y, x.x)
+  );
+}
+
+mat3
+make_x_mat(vec2 x) {
+  return mat3(
+    vec3(1.0, 0.0, 0.0),
+    vec3(0, x.y, x.x),
+    vec3(0, -x.x, x.y)
+  );
+}
+
+mat3
+make_y_mat(vec2 y) {
+  return mat3(
+    vec3(y.y, 0, -y.x),
+    vec3(0.0, 1.0, 0.0),
+    vec3(y.x, 0.0, y.y)
+  );
+}
+
+mat3
+make_z_mat(vec2 z) {
+  return mat3(
+    vec3(z.y, -z.x, 0.0),
+    vec3(z.x, z.y, 0.0),
+    vec3(0.0, 0.0, 1.0)
+  );
+}
+
+mat3
+look_at(vec3 fwd) {
+  vec3 up = vec3(0.0, 0.0, 1.0);
+
+  vec2 z = vec2(fwd.x, fwd.y);
+  float d = dot(z, z);
+  if (d == 0.0) {
+    z = vec2(0.0, 1.0);
+  } else {
+    z /= sqrt(d);
+  }
+
+  vec2 x = vec2(fwd.x * z.x + fwd.y * z.y, fwd.z);
+  d = dot(x, x);
+  if (d == 0.0) {
+    x = vec2(1.0, 0.0);
+  } else {
+    x /= sqrt(d);
+  }
+
+  vec2 y = vec2(up.x * z.y - up.y * z.x,
+                -up.x * x.y * z.x - up.y * x.y * z.y + up.z * x.x);
+  d = dot(y, y);
+  if (d == 0.0) {
+    y = vec2(0.0, 1.0);
+  } else {
+    y /= sqrt(d);
+  }
+
+  return make_xi_mat(x) * make_y_mat(z) * make_z_mat(y);
 }

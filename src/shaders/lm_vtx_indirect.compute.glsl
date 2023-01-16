@@ -94,19 +94,18 @@ main() {
   int start_node_index;
   get_kd_leaf_from_point(position + normal * u_bias, start_node_index);
 
+  float ray_weight = 1.0 / float(u_ray_count);
+
   vec3 gathered = vec3(0);
-  float total_dot = 0.0;
-  uint noise = random_seed(ivec3(u_ray_start, palette_pos));
+  uint noise = random_seed(ivec3(u_ray_count, palette_pos));
+  vec2 palette_offset;
+  palette_offset.x = randomize(noise);
+  palette_offset.y = randomize(noise);
   for (uint i = uint(u_ray_start); i < uint(u_ray_end); i++) {
-    vec3 ray_dir = normal_mat * generate_hemisphere_cosine_weighted_direction(noise);
+    vec3 ray_dir = normal_mat * halton_hemisphere_direction(int(i), u_ray_count, palette_offset);
     ray_dir = normalize(ray_dir);
 
     float dt = dot(normal, ray_dir);
-    if (dt <= 0.0) {
-      continue;
-    }
-
-    total_dot += dt;
 
     vec3 light = vec3(0);
     uint trace_result = ray_cast(position + normal * u_bias,
@@ -122,7 +121,7 @@ main() {
       if ((hit_data.tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky.  Bring in sky ambient color, but only on the first bounce.
         if (u_bounce == 0) {
-          light = u_sky_color;
+          light = u_sky_color * PI;
         }
 
       } else if (hit_data.tri.page >= 0) {
@@ -157,27 +156,26 @@ main() {
       }
     }
 
-    gathered += light;
+    gathered += light * ray_weight;
   }
 
-  vec4 running_total = imageLoad(vtx_gathered, palette_pos);
-  gathered += running_total.rgb;
-  total_dot += running_total.a;
+  // Accumulate what we gathered onto total incoming light to this vertex.
+  vec4 total_light = imageLoad(vtx_light, palette_pos);
+  total_light.rgb += gathered;
+  imageStore(vtx_light, palette_pos, total_light);
+
+  if (u_ray_start > 0) {
+    gathered += imageLoad(vtx_gathered, palette_pos).rgb;
+  }
 
   if (u_ray_end == u_ray_count) {
-    gathered /= total_dot;
+    vec3 surf_reflectivity = texelFetch(vtx_albedo, palette_pos, 0).rgb;
+    gathered *= surf_reflectivity;
 
-    vec3 surf_reflectivity = min(texelFetch(vtx_albedo, palette_pos, 0).rgb, vec3(0.99));
-    imageStore(vtx_gathered, palette_pos, vec4(gathered * surf_reflectivity, 1.0));
-
-    // Accumulate what we gathered onto total incoming light to this vertex.
-    vec4 total_light = imageLoad(vtx_light, palette_pos);
-    total_light.rgb += gathered;
-    imageStore(vtx_light, palette_pos, total_light);
-
-    float gathered_luminance = max(gathered.r, max(gathered.g, gathered.b));
-    imageAtomicMax(feedback_total_add, 0, uint(gathered_luminance * 10000));
-  } else {
-    imageStore(vtx_gathered, palette_pos, vec4(gathered, total_dot));
+    imageAtomicMax(feedback_total_add, 0, uint(gathered.r * 10000));
+    imageAtomicMax(feedback_total_add, 1, uint(gathered.g * 10000));
+    imageAtomicMax(feedback_total_add, 2, uint(gathered.b * 10000));
   }
+
+  imageStore(vtx_gathered, palette_pos, vec4(gathered, 1.0));
 }

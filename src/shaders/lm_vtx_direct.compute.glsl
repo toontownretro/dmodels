@@ -119,14 +119,14 @@ main() {
 
     if (ret == RAY_MISS) {
       if (light.bake_direct == 1) {
-        direct_light += attenuation * light.color.rgb;
+        direct_light += attenuation * light.color.rgb * PI;
       } else {
-        dynamic_light += attenuation * light.color.rgb;
+        dynamic_light += attenuation * light.color.rgb * PI;
       }
     }
   }
 
-  imageStore(vtx_light, palette_pos, vec4(direct_light, 1.0));
+  imageStore(vtx_light, palette_pos, vec4(direct_light / PI, 1.0));
 
   imageStore(vtx_light_dynamic, palette_pos, vec4(dynamic_light * albedo, 1.0));
 

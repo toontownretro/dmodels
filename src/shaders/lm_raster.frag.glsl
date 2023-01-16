@@ -126,6 +126,8 @@ main() {
     alpha = albedo.a;
   }
 
+  albedo.rgb = clamp(albedo.rgb, vec3(0.0), vec3(0.99));
+
   albedo_output = vec4(albedo.rgb, alpha);
   position_output = vec4(vertex_pos, alpha);
   normal_output = vec4(normalize(l_world_normal), 1.0);

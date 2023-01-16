@@ -22,5 +22,5 @@ uniform sampler2D base_texture_sampler;
 
 void
 main() {
-  albedo_output = vec4(textureLod(base_texture_sampler, l_texcoord, 0).rgb * l_color.rgb, 1.0);
+  albedo_output = vec4(clamp(textureLod(base_texture_sampler, l_texcoord, 0).rgb * l_color.rgb, vec3(0.0), vec3(0.99)), 1.0);
 }

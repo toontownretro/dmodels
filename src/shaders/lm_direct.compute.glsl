@@ -146,7 +146,7 @@ main() {
       }
     }
 
-    vec3 contrib = light.color.rgb * attenuation;
+    vec3 contrib = light.color.rgb * attenuation * PI;
 
     /*if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
       // Special case for sun light to implement soft shadows.
@@ -180,9 +180,9 @@ main() {
 
         float c[4] = float[](
           0.282095, //l0
-          0.488603 * L.y, //l1n1
+          -0.488603 * L.y, //l1n1
           0.488603 * L.z, //l1n0
-          0.488603 * L.x //l1p1
+          -0.488603 * L.x //l1p1
         );
 
         for (uint j = 0; j < 4; ++j) {
