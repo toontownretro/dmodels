@@ -97,21 +97,20 @@ uniform vec3 ambientProbe[9];
 
 vec3 ambientLookup(vec3 wnormal) {
 #if AMBIENT_LIGHT == 2
-  const float c1 = 0.429043;
-  const float c2 = 0.511664;
-  const float c3 = 0.743125;
-  const float c4 = 0.886227;
-  const float c5 = 0.247708;
-  return (c1 * ambientProbe[8] * (wnormal.x * wnormal.x - wnormal.y * wnormal.y) +
-          c3 * ambientProbe[6] * wnormal.z * wnormal.z +
-          c4 * ambientProbe[0] -
-          c5 * ambientProbe[6] +
-          2.0 * c1 * ambientProbe[4] * wnormal.x * wnormal.y +
-          2.0 * c1 * ambientProbe[7] * wnormal.x * wnormal.z +
-          2.0 * c1 * ambientProbe[5] * wnormal.y * wnormal.z +
-          2.0 * c2 * ambientProbe[3] * wnormal.x +
-          2.0 * c2 * ambientProbe[1] * wnormal.y +
-          2.0 * c2 * ambientProbe[2] * wnormal.z);
+  const float COSINE_A0 = 1.0;
+  const float COSINE_A1 = 2.0 / 3.0;
+  const float COSINE_A2 = 1.0 / 4.0;
+  vec3 color;
+  color = ambientProbe[0] * 0.282095 * COSINE_A0;
+  color += ambientProbe[1] * -0.488603 * wnormal.y * COSINE_A1;
+  color += ambientProbe[2] * 0.488603 * wnormal.z * COSINE_A1;
+  color += ambientProbe[3] * -0.488603 * wnormal.x * COSINE_A1;
+  color += ambientProbe[4] * 1.092548 * wnormal.x * wnormal.y * COSINE_A2;
+  color += ambientProbe[5] * -1.092548 * wnormal.y * wnormal.z * COSINE_A2;
+  color += ambientProbe[6] * 0.315392 * (3.0 * wnormal.z * wnormal.z - 1.0) * COSINE_A2;
+  color += ambientProbe[7] * -1.092548 * wnormal.x * wnormal.z * COSINE_A2;
+  color += ambientProbe[8] * 0.546274 * (wnormal.x * wnormal.x - wnormal.y * wnormal.y) * COSINE_A2;
+  return color;
 
 #elif AMBIENT_LIGHT == 1
   return p3d_LightModel.ambient.rgb;
