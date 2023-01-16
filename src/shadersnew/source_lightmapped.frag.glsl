@@ -132,6 +132,8 @@ const vec3 g_localBumpBasis[3] = vec3[](
     vec3(-OO_SQRT_6, -OO_SQRT_2, OO_SQRT_3)
 );
 
+#define PI 3.14159265359
+
 bool hasSelfIllum() {
 #if SELFILLUM
   return true;
@@ -228,8 +230,6 @@ main() {
   vec4 normalTexel2 = vec4(0.5, 0.5, 1.0, 1.0);
 #endif
   normalTexel = mix(normalTexel, normalTexel2, vec4(l_vertexBlend));
-  //normalTexel = mix(vec4(0.5, 0.5, 1.0, 1.0), normalTexel, 5.0);
-  //normalTexel.g = 1.0 - normalTexel.g;
 
   vec3 tangentSpaceNormalUnnormalized;
   if (!hasSSBump()) {
@@ -245,15 +245,14 @@ main() {
     origWorldNormal * tangentSpaceNormalUnnormalized.z;
   vec3 worldNormal = normalize(worldTangent * tangentSpaceNormal.y +
                                worldBinormal * tangentSpaceNormal.x +
-                               origWorldNormal * tangentSpaceNormal.z);
-  //o_color = vec4(worldNormal * 0.5 + 0.5, alpha);
-  //return;
+                               origWorldNormal * tangentSpaceNormal.z);// worldNormal = origWorldNormal;
 
   // Sample SH lightmap.
 
 #if 1
   vec3 L0 = textureBicubic(lightmapTextureL0, l_texcoordLightmap).rgb;
   vec3 diffuseLighting;
+#if 1
   vec3 L0factor = (L0 / 0.282095) * 0.488603;
   vec3 L1y = textureBicubic(lightmapTextureL1y, l_texcoordLightmap).rgb * 2 - 1;
   L1y *= L0factor;
@@ -261,14 +260,21 @@ main() {
   L1z *= L0factor;
   vec3 L1x = textureBicubic(lightmapTextureL1x, l_texcoordLightmap).rgb * 2 - 1;
   L1x *= L0factor;
-  if (hasSSBump()) {
-    diffuseLighting = L0 +
-      L1x * worldNormalUnnormalized.x +
-      L1y * worldNormalUnnormalized.y +
-      L1z * worldNormalUnnormalized.z;
-  } else {
-    diffuseLighting = L0 + L1x * worldNormal.x + L1y * worldNormal.y + L1z * worldNormal.z;
-  }
+  diffuseLighting = L0 * 0.282095;
+  diffuseLighting += L1y * -0.488603 * worldNormal.y * (2.0 / 3.0);
+  diffuseLighting += L1z * 0.488603 * worldNormal.z * (2.0 / 3.0);
+  diffuseLighting += L1x * -0.488603 * worldNormal.x * (2.0 / 3.0);
+  //if (hasSSBump()) {
+  //  diffuseLighting = L0 +
+  //    L1x * worldNormalUnnormalized.x +
+  //    L1y * worldNormalUnnormalized.y +
+  //    L1z * worldNormalUnnormalized.z;
+  //} else {
+    //diffuseLighting = L0 + L1x * worldNormal.x + L1y * worldNormal.y + L1z * worldNormal.z;
+  //}
+#else
+  diffuseLighting = L0 / 0.282095;
+#endif
 
 #else
   vec3 diffuseLighting = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 0)).rgb;
