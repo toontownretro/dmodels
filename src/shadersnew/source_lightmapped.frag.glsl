@@ -248,37 +248,9 @@ main() {
                                origWorldNormal * tangentSpaceNormal.z);// worldNormal = origWorldNormal;
 
   // Sample SH lightmap.
-
-#if 1
-  vec3 L0 = textureBicubic(lightmapTextureL0, l_texcoordLightmap).rgb;
-  vec3 diffuseLighting;
-#if 1
-  vec3 L0factor = (L0 / 0.282095) * 0.488603;
-  vec3 L1y = textureBicubic(lightmapTextureL1y, l_texcoordLightmap).rgb * 2 - 1;
-  L1y *= L0factor;
-  vec3 L1z = textureBicubic(lightmapTextureL1z, l_texcoordLightmap).rgb * 2 - 1;
-  L1z *= L0factor;
-  vec3 L1x = textureBicubic(lightmapTextureL1x, l_texcoordLightmap).rgb * 2 - 1;
-  L1x *= L0factor;
-  diffuseLighting = L0 * 0.282095;
-  diffuseLighting += L1y * -0.488603 * worldNormal.y * (2.0 / 3.0);
-  diffuseLighting += L1z * 0.488603 * worldNormal.z * (2.0 / 3.0);
-  diffuseLighting += L1x * -0.488603 * worldNormal.x * (2.0 / 3.0);
-  //if (hasSSBump()) {
-  //  diffuseLighting = L0 +
-  //    L1x * worldNormalUnnormalized.x +
-  //    L1y * worldNormalUnnormalized.y +
-  //    L1z * worldNormalUnnormalized.z;
-  //} else {
-    //diffuseLighting = L0 + L1x * worldNormal.x + L1y * worldNormal.y + L1z * worldNormal.z;
-  //}
-#else
-  diffuseLighting = L0 / 0.282095;
-#endif
-
-#else
-  vec3 diffuseLighting = textureArrayBicubic(lightmapTexture, vec3(l_texcoordLightmap, 0)).rgb;
-#endif
+  vec3 diffuseLighting = sample_l1_lightmap_bicubic(
+    lightmapTextureL0, lightmapTextureL1x, lightmapTextureL1y,
+    lightmapTextureL1z, worldNormal, l_texcoordLightmap);
 
   float NdotL;
 
