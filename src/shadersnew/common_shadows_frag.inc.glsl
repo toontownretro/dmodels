@@ -6,7 +6,8 @@ int FindCascade(vec4 shadowCoords[4], inout vec3 proj, int numCascades)
 	for (int i = 0; i < 4 && i < numCascades; i++)
 	{
 		proj = shadowCoords[i].xyz;
-		if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0)
+		if (proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0 &&
+            proj.z >= 0.0 && proj.z <= 1.0)
 		{
 			return i;
 		}
