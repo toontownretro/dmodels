@@ -11,6 +11,7 @@ int FindCascade(vec4 shadowCoords[4], inout vec3 proj, int numCascades)
 			return i;
 		}
 	}
+    return -1;
 }
 
 void GetSunShadow(inout float lshad, sampler2DArrayShadow shadowSampler, vec4 shadowCoords[4],
@@ -25,6 +26,10 @@ void GetSunShadow(inout float lshad, sampler2DArrayShadow shadowSampler, vec4 sh
 
 	vec3 proj = vec3(0);
 	int cascade = FindCascade(shadowCoords, proj, numCascades);
+    if (cascade < 0) {
+        lshad = 1.0;
+        return;
+    }
 
   vec4 coords = vec4(proj.xy, cascade, proj.z);
 
