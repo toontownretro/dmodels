@@ -123,34 +123,38 @@ main() {
   }
 #endif
 
+  vec4 albedo;
+
 #if BASETEXTURE
 
 #if !ANIMATED
-  o_color = texture(baseTextureSampler, g_tex_coord);
+  albedo = texture(baseTextureSampler, g_tex_coord);
 #else
   if (g_anim_frame != g_anim_next_frame) {
     vec4 samp0 = texture(baseTextureSampler, vec3(g_tex_coord, g_anim_frame));
     vec4 samp1 = texture(baseTextureSampler, vec3(g_tex_coord, g_anim_next_frame));
-    o_color = mix(samp0, samp1, g_anim_frac);
+    albedo = mix(samp0, samp1, g_anim_frac);
   } else {
-    o_color = texture(baseTextureSampler, vec3(g_tex_coord, g_anim_frame));
+    albedo = texture(baseTextureSampler, vec3(g_tex_coord, g_anim_frame));
   }
 #endif
 
 #else
-  o_color = vec4(1, 1, 1, 1);
+  albedo = vec4(1, 1, 1, 1);
 #endif
 
   // Handle alpha-only textures.
-  o_color += p3d_TexAlphaOnly;
+  albedo += p3d_TexAlphaOnly;
 
-  o_color *= g_vertex_color;
+  albedo *= g_vertex_color;
 
   if (BLEND_MODE == 2) {
-    o_color.rgb *= o_color.a;
+    albedo.rgb *= albedo.a;
   } else if (BLEND_MODE == 1) {
-    o_color.rgb = mix(vec3(0.5), o_color.rgb, o_color.a);
+    albedo.rgb = mix(vec3(0.5), albedo.rgb, albedo.a);
   }
+
+  vec3 light = vec3(1);
 
 #if DIRECT_LIGHT || AMBIENT_LIGHT
 
@@ -164,12 +168,12 @@ main() {
     lighting += g_basis_lighting0 * w.x + g_basis_lighting1 * w.y + g_basis_lighting2 * w.z;
 #endif
 
-    //o_color.rgb = lighting;
-
-    o_color.rgb *= lighting;
+    light = lighting;
   }
 
 #endif
+
+  o_color = vec4(albedo.rgb * light, albedo.a);
 
 #if ALPHA_TEST
   if (!do_alpha_test(o_color.a, ALPHA_TEST_MODE, ALPHA_TEST_REF)) {
