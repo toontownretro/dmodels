@@ -16,6 +16,8 @@ uniform vec4 p3d_ColorScale;
 in vec4 vertex;
 in vec4 p3d_Color;
 in vec3 p3d_Normal;
+in vec3 p3d_Tangent;
+in vec3 p3d_Binormal;
 
 #if BASETEXTURE
 uniform mat4 p3d_TextureTransform[1];
@@ -54,13 +56,17 @@ out vec3 l_worldNormal;
 void
 main() {
   vec4 final_vertex = vertex;
-  vec3 final_normal = vec3(0);
+  vec3 final_normal = p3d_Normal;
+  vec3 final_tangent = p3d_Tangent;
+  vec3 final_binormal = p3d_Binormal;
 #if SKINNING == 2
-  do_skinning8(vertex, vec3(0), p3d_TransformTable, transform_weight, transform_weight2,
-               transform_index, transform_index2, false, final_vertex, final_normal);
+  do_skinning8(vertex, p3d_Normal, p3d_Tangent, p3d_Binormal,
+               p3d_TransformTable, transform_weight, transform_weight2, transform_index, transform_index2,
+               final_vertex, final_normal, final_tangent, final_binormal);
 #elif SKINNING == 1
-  do_skinning(vertex, vec3(0), p3d_TransformTable, transform_weight,
-              transform_index, false, final_vertex, final_normal);
+  do_skinning(vertex, p3d_Normal, p3d_Tangent, p3d_Binormal,
+              p3d_TransformTable, transform_weight, transform_index,
+              final_vertex, final_normal, final_tangent, final_binormal);
 #endif
 
   vec4 world_pos = p3d_ModelMatrix * final_vertex;

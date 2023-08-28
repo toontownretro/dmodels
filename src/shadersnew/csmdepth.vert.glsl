@@ -45,12 +45,16 @@ void main() {
 
 #if SKINNING == 1
   vec3 foo = vec3(0);
-  do_skinning(p3d_Vertex, vec3(0), p3d_TransformTable, transform_weight, transform_index,
-              false, finalVertex, foo);
+  vec3 foo2 = vec3(0);
+  vec3 foo3 = vec3(0);
+  do_skinning(p3d_Vertex, vec3(0), vec3(0), vec3(0), p3d_TransformTable, transform_weight, transform_index,
+              finalVertex, foo, foo2, foo3);
 #elif SKINNING == 2
   vec3 foo = vec3(0);
-  do_skinning8(p3d_Vertex, vec3(0), p3d_TransformTable, transform_weight, transform_weight2,
-               transform_index, transform_index2, false, finalVertex, foo);
+  vec3 foo2 = vec3(0);
+  vec3 foo3 = vec3(0);
+  do_skinning8(p3d_Vertex, vec3(0), vec3(0), vec3(0), p3d_TransformTable, transform_weight, transform_weight2,
+               transform_index, transform_index2, finalVertex, foo, foo2, foo3);
 #endif
 
   // First move into world space.
