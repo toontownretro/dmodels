@@ -17,6 +17,16 @@
 #ifndef LM_BUFFERS_INC_GLSL
 #define LM_BUFFERS_INC_GLSL
 
+vec3
+uvec3_to_vec3(uvec3 vec) {
+  return vec3(uintBitsToFloat(vec.x), uintBitsToFloat(vec.y), uintBitsToFloat(vec.z));
+}
+
+vec3
+ivec3_to_vec3(ivec3 vec) {
+  return vec3(intBitsToFloat(vec.x), intBitsToFloat(vec.y), intBitsToFloat(vec.z));
+}
+
 struct LightmapVertex {
   vec3 position;
   vec3 normal;
@@ -90,7 +100,7 @@ struct LightmapTri {
   int page;
   uint flags;
 };
-uniform samplerBuffer triangles;
+uniform isamplerBuffer triangles;
 
 /**
  * Unpacks the ith lightmap triangle from the buffer.
@@ -99,15 +109,15 @@ LightmapTri
 get_lightmap_tri(uint i) {
   LightmapTri tri;
   int start = int(i) * 3;
-  vec4 indices = texelFetch(triangles, start);
+  ivec4 indices = texelFetch(triangles, start);
   tri.indices.x = uint(indices.x);
   tri.indices.y = uint(indices.y);
   tri.indices.z = uint(indices.z);
-  vec4 mins_flags = texelFetch(triangles, start + 1);
-  tri.mins = mins_flags.xyz;
+  ivec4 mins_flags = texelFetch(triangles, start + 1);
+  tri.mins = ivec3_to_vec3(mins_flags.xyz);
   tri.flags = uint(mins_flags.w);
-  vec4 maxs_page = texelFetch(triangles, start + 2);
-  tri.maxs = maxs_page.xyz;
+  ivec4 maxs_page = texelFetch(triangles, start + 2);
+  tri.maxs = ivec3_to_vec3(maxs_page.xyz);
   tri.page = int(maxs_page.w);
   return tri;
 }
@@ -116,17 +126,17 @@ void
 get_lightmap_tri(uint i, out LightmapTri tri) {
   int start = int(i) * 3;
 
-  vec4 data = texelFetch(triangles, start);
+  ivec4 data = texelFetch(triangles, start);
   tri.indices.x = uint(data.x);
   tri.indices.y = uint(data.y);
   tri.indices.z = uint(data.z);
 
   data = texelFetch(triangles, start + 1);
-  tri.mins = data.xyz;
+  tri.mins = ivec3_to_vec3(data.xyz);
   tri.flags = uint(data.w);
 
   data = texelFetch(triangles, start + 2);
-  tri.maxs = data.xyz;
+  tri.maxs = ivec3_to_vec3(data.xyz);
   tri.page = int(data.w);
 }
 
@@ -134,13 +144,13 @@ void
 get_lightmap_tri_0(uint i, inout LightmapTri tri) {
   int start = int(i) * 3;
 
-  vec4 data = texelFetch(triangles, start + 1);
+  ivec4 data = texelFetch(triangles, start + 1);
 
-  tri.mins = data.xyz;
+  tri.mins = ivec3_to_vec3(data.xyz);
   tri.flags = uint(data.w);
 
   data = texelFetch(triangles, start + 2);
-  tri.maxs = data.xyz;
+  tri.maxs = ivec3_to_vec3(data.xyz);
   tri.page = int(data.w);
 }
 
@@ -192,7 +202,7 @@ struct LightmapLight {
   // computed at run-time.
   uint bake_direct;
 };
-uniform samplerBuffer lights;
+uniform usamplerBuffer lights;
 
 /**
  * Returns the number of lightmap lights stored in the buffer.
@@ -211,25 +221,25 @@ get_lightmap_light(uint i) {
 
   int start = int(i) * 5;
 
-  vec4 type_atten = texelFetch(lights, start);
+  uvec4 type_atten = texelFetch(lights, start);
   light.light_type = uint(type_atten.x);
-  light.constant = type_atten.y;
-  light.linear = type_atten.z;
-  light.quadratic = type_atten.w;
+  light.constant = uintBitsToFloat(type_atten.y);
+  light.linear = uintBitsToFloat(type_atten.z);
+  light.quadratic = uintBitsToFloat(type_atten.w);
 
-  vec4 color_bake_direct = texelFetch(lights, start + 1);
-  light.color = color_bake_direct.xyz;
+  uvec4 color_bake_direct = texelFetch(lights, start + 1);
+  light.color = uvec3_to_vec3(color_bake_direct.xyz);
   light.bake_direct = uint(color_bake_direct.w);
 
-  light.pos = texelFetch(lights, start + 2).xyz;
+  light.pos = uvec3_to_vec3(texelFetch(lights, start + 2).xyz);
 
-  light.dir = texelFetch(lights, start + 3).xyz;
+  light.dir = uvec3_to_vec3(texelFetch(lights, start + 3).xyz);
 
-  vec4 spot_params = texelFetch(lights, start + 4);
-  light.exponent = spot_params.x;
-  light.stopdot = spot_params.y;
-  light.stopdot2 = spot_params.z;
-  light.oodot = spot_params.w;
+  uvec4 spot_params = texelFetch(lights, start + 4);
+  light.exponent = uintBitsToFloat(spot_params.x);
+  light.stopdot = uintBitsToFloat(spot_params.y);
+  light.stopdot2 = uintBitsToFloat(spot_params.z);
+  light.oodot = uintBitsToFloat(spot_params.w);
 
   return light;
 }
@@ -247,7 +257,7 @@ struct KDNode {
   int axis;
   float dist;
 };
-uniform samplerBuffer kd_nodes;
+uniform isamplerBuffer kd_nodes;
 
 int
 get_num_kd_nodes() {
@@ -256,11 +266,11 @@ get_num_kd_nodes() {
 
 void
 get_kd_node(int index, out KDNode node) {
-  vec4 data = texelFetch(kd_nodes, index);
+  ivec4 data = texelFetch(kd_nodes, index);
   node.back_child = int(data.x);
   node.front_child = int(data.y);
   node.axis = int(data.z);
-  node.dist = data.w;
+  node.dist = intBitsToFloat(data.w);
 }
 
 struct KDLeaf {
@@ -270,17 +280,17 @@ struct KDLeaf {
   uint first_triangle;
   uint num_triangles;
 };
-uniform samplerBuffer kd_leaves;
+uniform isamplerBuffer kd_leaves;
 
 void
 get_kd_leaf(int leaf_index, inout KDLeaf leaf) {
   int start = leaf_index * 4;
 
-  vec4 data = texelFetch(kd_leaves, start);
-  leaf.mins = data.xyz;
+  ivec4 data = texelFetch(kd_leaves, start);
+  leaf.mins = ivec3_to_vec3(data.xyz);
 
   data = texelFetch(kd_leaves, start + 1);
-  leaf.maxs = data.xyz;
+  leaf.maxs = ivec3_to_vec3(data.xyz);
 
   data = texelFetch(kd_leaves, start + 2);
   leaf.neighbors[0] = int(data.x);

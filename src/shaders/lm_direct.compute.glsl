@@ -103,15 +103,15 @@ main() {
     } else {
       light_pos = light.pos;
       L = light_pos - position;
-      float dist = length(L);
-      L = L / dist;
+      float dist = max(0.0001, length(L));
+      L = normalize(L);
 
       attenuation = 1.0 / (light.constant + (light.linear * dist) + (light.quadratic * dist * dist));
 
       if (light.light_type == LIGHT_TYPE_SPOT) {
-        float cos_theta = dot(light.dir, -L);
+        float cos_theta = clamp(dot(L, -normalize(light.dir)), 0, 1);
         float spot_atten = (cos_theta - light.stopdot2) * light.oodot;
-        spot_atten = max(0.0001, spot_atten);
+        spot_atten = clamp(spot_atten, 0, 1);
         spot_atten = pow(spot_atten, light.exponent);
         spot_atten = clamp(spot_atten, 0, 1);
         attenuation *= spot_atten;
@@ -120,6 +120,8 @@ main() {
 
     float NdotL = clamp(dot(normal, L), 0.0, 1.0);
     //attenuation *= NdotL;
+
+    attenuation = max(0.0, attenuation);
 
     //if (attenuation == 0.0) {
     //  continue;
