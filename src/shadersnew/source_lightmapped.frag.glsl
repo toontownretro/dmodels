@@ -240,11 +240,11 @@ main() {
                                    g_localBumpBasis[2] * normalTexel.z;
   }
   vec3 tangentSpaceNormal = normalize(tangentSpaceNormalUnnormalized);
-  vec3 worldNormalUnnormalized = worldTangent * tangentSpaceNormalUnnormalized.y +
-    worldBinormal * tangentSpaceNormalUnnormalized.x +
+  vec3 worldNormalUnnormalized = worldTangent * tangentSpaceNormalUnnormalized.x +
+    worldBinormal * tangentSpaceNormalUnnormalized.y +
     origWorldNormal * tangentSpaceNormalUnnormalized.z;
-  vec3 worldNormal = normalize(worldTangent * tangentSpaceNormal.y +
-                               worldBinormal * tangentSpaceNormal.x +
+  vec3 worldNormal = normalize(worldTangent * tangentSpaceNormal.x +
+                               worldBinormal * tangentSpaceNormal.y +
                                origWorldNormal * tangentSpaceNormal.z);// worldNormal = origWorldNormal;
 
   // Sample SH lightmap.
