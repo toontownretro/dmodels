@@ -97,15 +97,13 @@ main() {
   float ray_weight = 1.0 / float(u_ray_count);
 
   vec3 gathered = vec3(0);
-  uint noise = random_seed(ivec3(u_ray_count, palette_pos));
+  uint noise = random_seed(ivec3(vtx_index, palette_pos));
   vec2 palette_offset;
   palette_offset.x = randomize(noise);
   palette_offset.y = randomize(noise);
   for (uint i = uint(u_ray_start); i < uint(u_ray_end); i++) {
-    vec3 ray_dir = normal_mat * halton_hemisphere_direction(int(i), u_ray_count, palette_offset);
+    vec3 ray_dir = normal_mat * halton_hemisphere_direction_cosine_weighted(int(i), palette_offset);
     ray_dir = normalize(ray_dir);
-
-    float dt = dot(normal, ray_dir);
 
     vec3 light = vec3(0);
     uint trace_result = ray_cast(position + normal * u_bias,
@@ -121,7 +119,7 @@ main() {
       if ((hit_data.tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky.  Bring in sky ambient color, but only on the first bounce.
         if (u_bounce == 0) {
-          light = u_sky_color * PI;
+          light = u_sky_color;
         }
 
       } else if (hit_data.tri.page >= 0) {

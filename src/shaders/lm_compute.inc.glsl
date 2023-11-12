@@ -308,28 +308,31 @@ vec2 sample_halton(int n) {
   return vec2(calc_halton(n + 1, 2), calc_halton(n + 1, 3));
 }
 
-vec3 halton_hemisphere_direction(int index, int total_rays, vec2 offset) {
+// Uniform sphere.
+vec3 halton_hemisphere_direction(int index, vec2 offset) {
   vec2 uv = sample_halton(index);
 
   uv.x = fract(uv.x + offset.x);
   uv.y = fract(uv.y + offset.y);
 
-#if 1
+  float noise1 = uv.x;
+  float noise2 = uv.y * 2.0 * PI;
+
+  float factor = sqrt(1 - (noise1 * noise1));
+  return vec3(factor * cos(noise2), factor * sin(noise2), noise1);
+}
+
+// Cosine weighted.
+vec3 halton_hemisphere_direction_cosine_weighted(int index, vec2 offset) {
+  vec2 uv = sample_halton(index);
+
+  uv.x = fract(uv.x + offset.x);
+  uv.y = fract(uv.y + offset.y);
+
   float noise1 = uv.x;
   float noise2 = uv.y * 2.0 * PI;
 
   return vec3(sqrt(noise1) * cos(noise2), sqrt(noise1) * sin(noise2), sqrt(1.0 - noise1));
-#else
-
-  float cos_theta = uv.x;
-  float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
-  float sin_phi, cos_phi;
-  float phi = uv.y * 2 * PI;
-  sin_phi = sin(phi);
-  cos_phi = cos(phi);
-
-  return vec3(cos_phi * sin_theta, sin_phi * sin_theta, cos_theta);
-#endif
 }
 
 mat3

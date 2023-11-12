@@ -158,10 +158,10 @@ vec4 textureBicubic(sampler2D sampler, vec2 texCoords) {
 
     offset *= invTexSize.xxyy;
 
-    vec4 sample0 = texture(sampler, offset.xz);
-    vec4 sample1 = texture(sampler, offset.yz);
-    vec4 sample2 = texture(sampler, offset.xw);
-    vec4 sample3 = texture(sampler, offset.yw);
+    vec4 sample0 = textureLod(sampler, offset.xz, 0.0);
+    vec4 sample1 = textureLod(sampler, offset.yz, 0.0);
+    vec4 sample2 = textureLod(sampler, offset.xw, 0.0);
+    vec4 sample3 = textureLod(sampler, offset.yw, 0.0);
 
     float sx = s.x / (s.x + s.y);
     float sy = s.z / (s.z + s.w);

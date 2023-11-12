@@ -77,6 +77,7 @@ do_fog(in vec3 input_color, in vec3 eye_position, vec3 fog_color,
 #define COSINE_A0 (1.0)
 #define COSINE_A1 (2.0 / 3.0)
 #define COSINE_A2 (1.0 / 4.0)
+#define DIR_FACTOR (0.32573)
 
 /**
  *
@@ -85,15 +86,45 @@ vec3
 sample_l2_ambient_probe(in vec3 probe[9], in vec3 normal) {
   vec3 color;
   color = probe[0] * 0.282095 * COSINE_A0;
-  color += probe[1] * -0.488603 * normal.y * COSINE_A1;
+  color += probe[1] * 0.488603 * normal.y * COSINE_A1;
   color += probe[2] * 0.488603 * normal.z * COSINE_A1;
-  color += probe[3] * -0.488603 * normal.x * COSINE_A1;
+  color += probe[3] * 0.488603 * normal.x * COSINE_A1;
   color += probe[4] * 1.092548 * normal.x * normal.y * COSINE_A2;
-  color += probe[5] * -1.092548 * normal.y * normal.z * COSINE_A2;
+  color += probe[5] * 1.092548 * normal.y * normal.z * COSINE_A2;
   color += probe[6] * 0.315392 * (3.0 * normal.z * normal.z - 1.0) * COSINE_A2;
-  color += probe[7] * -1.092548 * normal.x * normal.z * COSINE_A2;
+  color += probe[7] * 1.092548 * normal.x * normal.z * COSINE_A2;
   color += probe[8] * 0.546274 * (normal.x * normal.x - normal.y * normal.y) * COSINE_A2;
+  /*const float c1 = 0.429043;
+  const float c2 = 0.511664;
+  const float c3 = 0.743125;
+  const float c4 = 0.886227;
+  const float c5 = 0.247708;
+  color = (c1 * probe[8] * (normal.x * normal.x - normal.y * normal.y) +
+           c3 * probe[6] * normal.z * normal.z +
+           c4 * probe[0] -
+           c5 * probe[6] +
+           2.0 * c1 * probe[4] * normal.x * normal.y +
+           2.0 * c1 * probe[7] * normal.x * normal.z +
+           2.0 * c1 * probe[5] * normal.y * normal.z +
+           2.0 * c2 * probe[3] * normal.x +
+           2.0 * c2 * probe[1] * normal.y +
+           2.0 * c2 * probe[2] * normal.z);*/
   return color;
+}
+
+float
+sample_l1_irradiance_geomerics(vec3 dir, vec4 sh) {
+  float R0 = sh[0];
+
+  vec3 R1 = 0.5 * vec3(-sh[3], -sh[1], sh[2]);
+  float len_r1 = length(R1);
+
+  float q = 0.5 * (1.0 + dot(R1 / len_r1, dir));
+
+  float p = 1.0 + 2.0 * len_r1 / R0;
+  float a = (1.0 - len_r1 / R0) / (1.0 + len_r1 / R0);
+
+  return R0 * (a + (1.0 - a) * (p + 1.0) * pow(abs(q), p));
 }
 
 /**
@@ -110,10 +141,16 @@ sample_l1_lightmap_bicubic(in sampler2D lightmap_l0, in sampler2D lightmap_l1x, 
   L1z *= L0factor;
   vec3 L1x = textureBicubic(lightmap_l1x, texcoord).rgb * 2 - 1;
   L1x *= L0factor;
-  vec3 color = L0 * 0.282095 * COSINE_A0;
-  color += L1y * -0.488603 * normal.y * COSINE_A1;
-  color += L1z * 0.488603 * normal.z * COSINE_A1;
-  color += L1x * -0.488603 * normal.x * COSINE_A1;
+  vec3 color = L0 * 0.282095;
+  color += L1y * -DIR_FACTOR * normal.y;
+  color += L1z * DIR_FACTOR * normal.z;
+  color += L1x * -DIR_FACTOR * normal.x;
+
+  //vec3 color = vec3(
+  //  sample_l1_irradiance_geomerics(normal, vec4(L0.x, L1y.x, L1z.x, L1x.x)),
+  //  sample_l1_irradiance_geomerics(normal, vec4(L0.y, L1y.y, L1z.y, L1x.y)),
+  //  sample_l1_irradiance_geomerics(normal, vec4(L0.z, L1y.z, L1z.z, L1x.z))
+  //) / 3.14159;
   return color;
 }
 

@@ -76,7 +76,7 @@ main() {
   get_kd_leaf_from_point(position, start_node_index);
 
   uint noise = random_seed(ivec3(0, probe_index, 49502741));
-  float ray_weight = 4.0 / float(u_ray_count);
+  float ray_weight = (4.0 * PI) / float(u_ray_count);
   for (uint i = uint(u_ray_from); i < uint(u_ray_to); i++) {
     vec3 ray_dir = generate_hemisphere_uniform_direction(noise);
     if (bool(i & 1)) {
@@ -96,7 +96,7 @@ main() {
       if ((hit_data.tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky.  Bring in sky ambient color.
         if (u_bounce == 0) {
-          light = u_sky_color * PI;
+          light = u_sky_color;
         }
 
       } else if (hit_data.tri.page >= 0) {
@@ -135,14 +135,14 @@ main() {
       // Accumulate into L2 spherical harmonics.
       float c[9] = float[](
         0.282095, //l0
-        -0.488603 * ray_dir.y, //l1n1
+        0.488603 * ray_dir.y, //l1n1
         0.488603 * ray_dir.z, //l1n0
-        -0.488603 * ray_dir.x, //l1p1
+        0.488603 * ray_dir.x, //l1p1
         1.092548 * ray_dir.x * ray_dir.y, //l2n2
-        -1.092548 * ray_dir.y * ray_dir.z, //l2n1
+        1.092548 * ray_dir.y * ray_dir.z, //l2n1
         //0.315392 * (ray_dir.x * ray_dir.x + ray_dir.y * ray_dir.y + 2.0 * ray_dir.z * ray_dir.z), //l20
         0.315392 * (3.0 * ray_dir.z * ray_dir.z - 1.0), //l20
-        -1.092548 * ray_dir.x * ray_dir.z, //l2p1
+        1.092548 * ray_dir.x * ray_dir.z, //l2p1
         0.546274 * (ray_dir.x * ray_dir.x - ray_dir.y * ray_dir.y) //l2p2
       );
 

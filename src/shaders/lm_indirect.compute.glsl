@@ -109,21 +109,22 @@ main() {
     vec4(0.0, 0.0, 0.0, 1.0),
     vec4(0.0, 0.0, 0.0, 1.0));
 
-  vec3 gathered = vec3(0);
-
   uint noise = random_seed(ivec3(u_ray_count, palette_pos));
   vec2 palette_offset;
   palette_offset.x = randomize(noise);
   palette_offset.y = randomize(noise);
 
   float ray_weight = 1.0 / float(u_ray_count);
-  float ray_weight_sh = 2.0 / float(u_ray_count);
+  float ray_weight_sh = (2.0 * PI) / float(u_ray_count);
+
+  vec3 gathered = vec3(0.0);
+  if (u_ray_from > 0) {
+    gathered = imageLoad(luxel_gathered, palette_coord).rgb;
+  }
 
   for (uint i = u_ray_from; i < u_ray_to; i++) {
-    vec3 ray_dir = normal_mat * halton_hemisphere_direction(int(i), u_ray_count, palette_offset);
+    vec3 ray_dir = normal_mat * halton_hemisphere_direction(int(i), palette_offset);
     ray_dir = normalize(ray_dir);
-
-    float dt = dot(normal, ray_dir);
 
     vec3 light = vec3(0);
     uint trace_result = ray_cast(position + normal * u_bias,
@@ -139,7 +140,7 @@ main() {
       if ((hit_data.tri.flags & TRIFLAGS_SKY) != 0) {
         // Hit sky.  Bring in sky ambient color, but only on the first bounce.
         if (u_bounce == 0) {
-          light = u_sky_color * PI;
+          light = u_sky_color;
         }
 
       } else if (hit_data.tri.page >= 0) {
@@ -188,10 +189,6 @@ main() {
   }
 
   // Store gathered light.
-
-  if (u_ray_from > 0) {
-    gathered += imageLoad(luxel_gathered, palette_coord).rgb;
-  }
 
   if (u_ray_to == u_ray_count) {
     // If this is the final ray pass for this bounce, modulate the total
