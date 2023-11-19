@@ -19,40 +19,42 @@ shared uint localHistogram[NUM_HISTOGRAM_BINS];
 
 const vec3 luminance_weights = vec3(0.2125, 0.7154, 0.0721);
 
-uint colorToHistogramBin(vec3 color) {
-  float luminance = dot(color, luminance_weights);
+int colorToHistogramBin(vec3 color) {
+  float luminance = dot(color, luminance_weights) * 10000;
 
-  // Avoid taking log2 of 0.
-  luminance = max(0.001, luminance);
+  // Calculate the log_2 luminance and express it as a value in [0.0, 1.0]
+  // where 0.0 represents the minimum luminance, and 1.0 represents the max.
+  float logLum = clamp((log2(luminance) - minLogLum) * ooLogLumRange, 0.0, 1.0);
 
-  const float K = 12.5;
-  float ev = log2(luminance * 100.0 / K);
+  // Ignore pixels out of range?
+  //if (logLum < 0.0 || logLum > 1.0) {
+  //  return -1;
+  //}
 
-  float logLuminance = clamp((ev - minLogLum) * ooLogLumRange, 0, 1);
-  return uint(logLuminance * 254.0 + 1.0);
+  return clamp(int(logLum * 256.0), 0, 255);
 }
 
 void main() {
-  //if (gl_LocalInvocationIndex < NUM_HISTOGRAM_BINS) {
-    localHistogram[gl_LocalInvocationIndex] = 0;
-  //}
-
+  localHistogram[gl_LocalInvocationIndex] = 0;
   barrier();
 
   uvec2 size = textureSize(sceneImage, 0).xy;
 
+  vec2 fsize = vec2(size);
+  vec2 center = fsize / 2.0;
+
   if (gl_GlobalInvocationID.x < size.x && gl_GlobalInvocationID.y < size.y) {
+    vec2 coord = vec2(gl_GlobalInvocationID.xy);
+    float w = 1.0 - smoothstep(0.0, 1.0, (distance(coord, center) / (fsize.y * 0.5)));
     vec3 color = texelFetch(sceneImage, ivec2(gl_GlobalInvocationID.xy), 0).rgb;
-    uint binIndex = colorToHistogramBin(color);
-    if (binIndex > 0) {
-      atomicAdd(localHistogram[binIndex], 1);
+    int binIndex = colorToHistogramBin(color);
+    if (binIndex >= 0) {
+      atomicAdd(localHistogram[uint(binIndex)], int(w * 100.0));
     }
 
   }
 
   barrier();
 
-  //if (gl_LocalInvocationIndex < NUM_HISTOGRAM_BINS) {
-    imageAtomicAdd(histogram, int(gl_LocalInvocationIndex), localHistogram[gl_LocalInvocationIndex]);
-  //}
+  imageAtomicAdd(histogram, int(gl_LocalInvocationIndex), localHistogram[gl_LocalInvocationIndex]);
 }

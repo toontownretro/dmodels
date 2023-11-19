@@ -8,7 +8,7 @@
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 uniform sampler2D sceneImage;
-layout(r32ui) uniform uimage1D histogram;
+coherent layout(r32ui) uniform uimage1D histogram;
 layout(r32f) uniform image1D luminanceOutput;
 uniform float osg_DeltaFrameTime;
 
@@ -38,11 +38,12 @@ void main() {
     barrier();
   }
 
-  if (gl_LocalInvocationIndex == 0) {
+  if (gl_GlobalInvocationID == 0) {
     // Compute a target exposure value.
-    float weightedAverage = (localHistogram[0] / max(pixelCount - countForThisBin, 1.0)) - 1.0;
-    float weightedAverageEv = ((weightedAverage / 254.0) * logLumRange) + minLogLum;
-    imageStore(luminanceOutput, 0, vec4(weightedAverageEv));
+    float weightedLogAverage = (localHistogram[0] / max(pixelCount - countForThisBin, 1.0)) - 1.0;
+    // Map from our histogram space to actual luminance
+    float weightedAvgLum = ((weightedLogAverage / 254.0) * logLumRange) + minLogLum;
+    imageStore(luminanceOutput, 0, vec4(weightedAvgLum));
   }
 }
 
