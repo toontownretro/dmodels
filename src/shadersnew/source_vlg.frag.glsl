@@ -15,6 +15,7 @@
 #pragma combo ALPHA_TEST      0 1
 #pragma combo HAS_SHADOW_SUNLIGHT 0 1
 #pragma combo CLIPPING        0 1
+#pragma combo DETAIL          0 1
 
 // All of these are dependent on direct lighting.
 #pragma skip $[and $[not $[DIRECT_LIGHT]],$[or $[PHONGWARP],$[LIGHTWARP],$[HAS_SHADOW_SUNLIGHT]]]
@@ -151,6 +152,15 @@ layout(constant_id = 10) const int NUM_CLIP_PLANES = 0;
 
 layout(constant_id = 11) const bool BAKED_VERTEX_LIGHT = false;
 
+#if DETAIL
+uniform sampler2D detailSampler;
+uniform vec2 detailParams;
+uniform vec3 detailTint;
+#define detailScale (detailParams.y)
+#define detailBlendFactor (detailParams.x)
+layout(constant_id = 14) const int DETAIL_BLEND_MODE = 0;
+#endif
+
 out vec4 o_color;
 
 float Fresnel(vec3 vNormal, vec3 vEyeDir)
@@ -207,9 +217,9 @@ ambientLookup(vec3 wnormal) {
 }
 
 #if DIRECT_LIGHT
-vec3 diffuseTerm(float NdotL/*, float shadow*/) {
+vec3 diffuseTerm(float NdotL, float shadow) {
   float result;
-  if (false) {//HALFLAMBERT) {
+  if (false) {//(HALFLAMBERT) {
     result = clamp(NdotL * 0.5 + 0.5, 0, 1);
 #if !LIGHTWARP
     result *= result;
@@ -276,7 +286,13 @@ void doLight(in ClusterLightData light, inout vec3 diffuseLighting, inout vec3 s
     fNdotL = max(0.0, dot(L, worldNormal));
 
 #if HAS_SHADOW_SUNLIGHT
+#if !LIGHTWARP
+    if (fNdotL > 0.0) {
+      GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, fNdotL, NUM_CASCADES);
+    }
+#else
     GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, fNdotL, NUM_CASCADES);
+#endif
 #endif
 
   } else {
@@ -305,7 +321,7 @@ void doLight(in ClusterLightData light, inout vec3 diffuseLighting, inout vec3 s
 
   lightAtten *= shadowFactor;
 
-  vec3 NdotL = diffuseTerm(fNdotL/*, shadowFactor*/);
+  vec3 NdotL = diffuseTerm(fNdotL, shadowFactor);
 
   diffuseLighting += lightColor * lightAtten * NdotL;
 
@@ -405,6 +421,13 @@ main() {
   bool baseAlphaIsAlpha = !(hasBaseAlphaSelfIllumMask() || hasBaseMapAlphaEnvMapMask() || hasBaseMapAlphaPhongMask());
 
   vec4 baseColor = texture(albedoTexture, l_texcoord);
+
+#if DETAIL
+  vec4 detailTexel = texture(detailSampler, l_texcoord * detailScale);
+  detailTexel *= vec4(detailTint, 1.0);
+  baseColor = texture_combine(baseColor, detailTexel, DETAIL_BLEND_MODE, detailBlendFactor);
+#endif
+
   float alpha;
   if (baseAlphaIsAlpha) {
     // Base alpha is actually an alpha value.

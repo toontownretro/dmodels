@@ -11,6 +11,8 @@
 #pragma combo BUMPMAP2     0 1
 #pragma combo PLANAR_REFLECTION 0 1
 #pragma combo CLIPPING    0 1
+#pragma combo DETAIL      0 1
+#pragma combo LIGHTMAP    0 1
 
 #pragma skip $[and $[or $[not $[ENVMAP],$[not $[PLANAR_REFLECTION]]]],$[ENVMAPMASK]]
 #pragma skip $[and $[PLANAR_REFLECTION],$[ENVMAP]]
@@ -33,6 +35,15 @@ uniform vec2 p3d_LightLensZScaleBias;
 uniform sampler2D baseTexture;
 #if BASETEXTURE2
 uniform sampler2D baseTexture2;
+#endif
+
+#if DETAIL
+uniform sampler2D detailSampler;
+uniform vec2 detailParams;
+uniform vec3 detailTint;
+#define detailScale (detailParams.y)
+#define detailBlendFactor (detailParams.x)
+layout(constant_id = 9) const int DETAIL_BLEND_MODE = 0;
 #endif
 
 #if BUMPMAP || BUMPMAP2
@@ -103,10 +114,12 @@ uniform vec4 p3d_WorldClipPlane[4];
 layout(constant_id = 7) const int NUM_CLIP_PLANES = 0;
 #endif
 
+#if LIGHTMAP
 uniform sampler2D lightmapTextureL0;
 uniform sampler2D lightmapTextureL1y;
 uniform sampler2D lightmapTextureL1z;
 uniform sampler2D lightmapTextureL1x;
+#endif
 
 in vec2 l_texcoord;
 in vec2 l_texcoordLightmap;
@@ -131,8 +144,6 @@ const vec3 g_localBumpBasis[3] = vec3[](
     vec3(-OO_SQRT_6, OO_SQRT_2, OO_SQRT_3),
     vec3(-OO_SQRT_6, -OO_SQRT_2, OO_SQRT_3)
 );
-
-#define PI 3.14159265359
 
 bool hasSelfIllum() {
 #if SELFILLUM
@@ -166,25 +177,6 @@ bool hasSSBump() {
 #endif
 }
 
-#define lumaConv vec3(0.2125, 0.7154, 0.0721)
-
-float
-shEvaluateDiffuseL1Geomerics(float L0, vec3 L1, vec3 n) {
-  float R0 = L0;
-
-  vec3 R1 = 0.5 * L1;
-
-  float lenR1 = length(R1);
-
-  float q = dot(normalize(R1), n) * 0.5 + 0.5;
-
-  float p = 1.0 + 2.0 * lenR1 / R0;
-
-  float a = (1.0 - lenR1 / R0) / (1.0 + lenR1 / R0);
-
-  return R0 * (a + (1.0 - a) * (p + 1.0) * pow(q, p));
-}
-
 void
 main() {
 #if CLIPPING
@@ -200,6 +192,11 @@ main() {
   vec4 baseSample = texture(baseTexture, l_texcoord);
 #if BASETEXTURE2
   baseSample = mix(baseSample, texture(baseTexture2, l_texcoord), vec4(l_vertexBlend));
+#endif
+#if DETAIL
+  vec4 detailTexel = texture(detailSampler, l_texcoord * detailScale);
+  detailTexel *= vec4(detailTint, 1.0);
+  baseSample = texture_combine(baseSample, detailTexel, DETAIL_BLEND_MODE, detailBlendFactor);
 #endif
   if (!baseAlphaIsEnvMapMask() && !hasSelfIllum()) {
     alpha *= baseSample.a;
@@ -240,17 +237,47 @@ main() {
                                    g_localBumpBasis[2] * normalTexel.z;
   }
   vec3 tangentSpaceNormal = normalize(tangentSpaceNormalUnnormalized);
-  vec3 worldNormalUnnormalized = worldTangent * tangentSpaceNormalUnnormalized.x +
-    worldBinormal * tangentSpaceNormalUnnormalized.y +
-    origWorldNormal * tangentSpaceNormalUnnormalized.z;
   vec3 worldNormal = normalize(worldTangent * tangentSpaceNormal.x +
-                               worldBinormal * tangentSpaceNormal.y +
+                               -worldBinormal * tangentSpaceNormal.y +
                                origWorldNormal * tangentSpaceNormal.z);// worldNormal = origWorldNormal;
 
-  // Sample SH lightmap.
-  vec3 diffuseLighting = sample_l1_lightmap_bicubic(
-    lightmapTextureL0, lightmapTextureL1x, lightmapTextureL1y,
-    lightmapTextureL1z, worldNormal, l_texcoordLightmap);
+  vec3 diffuseLighting = vec3(1.0);
+
+#if LIGHTMAP
+  vec3 sh[4];
+  get_l1_lightmap_sample(lightmapTextureL0, lightmapTextureL1x,
+    lightmapTextureL1y, lightmapTextureL1z, l_texcoordLightmap, sh);
+  if (hasSSBump()) {
+    // Evaluate the SH along each bump basis vector to get an equivalent
+    // of RNM.  Then do the SS bump equation.
+
+    // Generate world-space RNM basis vectors.
+    vec3 dir1 = normalize(worldTangent * g_localBumpBasis[0].x +
+                          -worldBinormal * g_localBumpBasis[0].y +
+                          origWorldNormal * g_localBumpBasis[0].z);
+    vec3 dir2 = normalize(worldTangent * g_localBumpBasis[1].x +
+                          -worldBinormal * g_localBumpBasis[1].y +
+                          origWorldNormal * g_localBumpBasis[1].z);
+    vec3 dir3 = normalize(worldTangent * g_localBumpBasis[2].x +
+                          -worldBinormal * g_localBumpBasis[2].y +
+                          origWorldNormal * g_localBumpBasis[2].z);
+
+    // Evaluate SH for each basis vector.
+    vec3 col1 = eval_sh_l1(sh, dir1);
+    vec3 col2 = eval_sh_l1(sh, dir2);
+    vec3 col3 = eval_sh_l1(sh, dir3);
+
+    // SS-bump lighting from RNM.
+    diffuseLighting = col1 * normalTexel.x + col2 * normalTexel.y + col3 * normalTexel.z;
+
+  } else {
+    // Regular normal map route.  Just evaluate the SH for the single normal.
+    diffuseLighting = eval_sh_l1(sh, worldNormal);
+  }
+#endif
+
+  //o_color = vec4(diffuseLighting, 1);
+  //return;
 
   float NdotL;
 
