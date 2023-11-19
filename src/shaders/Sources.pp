@@ -9,6 +9,7 @@
     cubemap_filter.compute.glsl \
     debug_csm.frag.glsl \
     debug_csm.vert.glsl \
+    light_probe_vis.vert.glsl light_probe_vis.frag.glsl \
     lm_buffers.inc.glsl lm_compute.inc.glsl \
     lm_direct.compute.glsl lm_indirect.compute.glsl lm_unocclude.compute.glsl \
     lm_raster.frag.glsl lm_raster.vert.glsl \
