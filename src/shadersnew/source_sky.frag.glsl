@@ -1,4 +1,4 @@
-#version 330
+#version 430
 
 #pragma combo COMPRESSED_HDR 0 1
 

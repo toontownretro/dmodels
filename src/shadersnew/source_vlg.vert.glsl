@@ -1,4 +1,4 @@
-#version 330
+#version 430
 
 #pragma combo SKINNING 0 2
 #pragma combo HAS_SHADOW_SUNLIGHT 0 1

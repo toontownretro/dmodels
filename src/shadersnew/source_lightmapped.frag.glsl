@@ -1,4 +1,4 @@
-#version 330
+#version 430
 
 #pragma combo BUMPMAP     0 1
 #pragma combo ENVMAP      0 1

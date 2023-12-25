@@ -1,4 +1,4 @@
-#version 330
+#version 430
 
 #pragma combo SUNLIGHT 0 1
 #pragma combo PLANAR_REFLECTION 0 1
