@@ -232,7 +232,7 @@ vec3 diffuseTerm(float NdotL, float shadow) {
 
   vec3 diff = vec3(result);
 #if LIGHTWARP
-  diff = 2.0 * texture(lightWarpTexture, result).rgb;
+  diff = 2.0 * textureLod(lightWarpTexture, result, 0.0).rgb;
 #endif
 
   return diff;
@@ -247,7 +247,7 @@ void specularAndRimTerms(inout vec3 specularLighting, inout vec3 rimLighting,
   specularLighting = vec3(pow(NdotH, specularExponent));
 
 #if PHONGWARP
-  specularLighting *= texture(phongWarpTexture, vec2(specularLighting.x, fresnel)).rgb;
+  specularLighting *= textureLod(phongWarpTexture, vec2(specularLighting.x, fresnel), 0.0).rgb;
 #endif
 
   float NdotL = max(0.0, dot(worldNormal, lightDir));
