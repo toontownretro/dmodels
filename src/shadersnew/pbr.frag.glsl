@@ -23,9 +23,8 @@ uniform sampler2D roughness_sampler;
 uniform sampler2D metalness_sampler;
 uniform sampler2D ao_sampler;
 uniform sampler2D emission_sampler;
-//uniform sampler2D emission_sampler;
 
-vec4 scales;
+uniform vec4 scales;
 #define roughness_scale (scales.x)
 #define ao_scale (scales.y)
 #define emission_scale (scales.z)
