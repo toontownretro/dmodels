@@ -111,6 +111,18 @@ layout(constant_id = 10) const int NUM_CLIP_PLANES = 0;
 
 layout(constant_id = 11) const bool BAKED_VERTEX_LIGHT = false;
 
+in vec4 l_world_position;
+in vec3 l_world_normal;
+in vec2 l_texcoord;
+in vec3 l_world_tangent;
+in vec3 l_world_binormal;
+in vec3 l_world_vertex_to_eye;
+in vec4 l_vertex_color;
+in vec3 l_vertex_light;
+in vec3 l_eye_pos;
+
+out vec4 o_color;
+
 vec3
 ambientLookup(vec3 wnormal) {
 #if LIGHTMAP
@@ -137,18 +149,6 @@ ambientLookup(vec3 wnormal) {
 
 #endif
 }
-
-in vec4 l_world_position;
-in vec3 l_world_normal;
-in vec2 l_texcoord;
-in vec3 l_world_tangent;
-in vec3 l_world_binormal;
-in vec3 l_world_vertex_to_eye;
-in vec4 l_vertex_color;
-in vec3 l_vertex_light;
-in vec3 l_eye_pos;
-
-out vec4 o_color;
 
 // GGX/Towbridge-Reitz normal distribution function.
 // Uses Disney's reparametrization of alpha = roughness^2.
@@ -308,7 +308,7 @@ main() {
   vec4 albedo = texture(albedo_sampler, l_texcoord);
   albedo *= l_vertex_color;
 #if ALPHA_TEST
-  if (!do_alpha_test(alpha.a, ALPHA_TEST_MODE, ALPHA_TEST_REF)) {
+  if (!do_alpha_test(albedo.a, ALPHA_TEST_MODE, ALPHA_TEST_REF)) {
     discard;
   }
 #endif
