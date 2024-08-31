@@ -81,7 +81,7 @@ uniform vec3 eyeOrigin[1];
 uniform vec4 irisProjectionU[1];
 uniform vec4 irisProjectionV[1];
 
-uniform vec4 wspos_view;
+uniform vec3 wspos_view;
 
 // Ray sphere intersect returns distance along ray to intersection ================================
 float intersectRaySphere(vec3 cameraPos, vec3 ray, vec3 sphereCenter, float sphereRadius) {

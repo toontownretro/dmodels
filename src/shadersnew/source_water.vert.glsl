@@ -12,7 +12,7 @@ in vec2 texcoord;
 uniform mat4 p3d_ModelMatrix;
 uniform mat4 p3d_ViewMatrix;
 uniform mat4 p3d_ProjectionMatrix;
-uniform vec4 wspos_view;
+uniform vec3 wspos_view;
 
 out vec2 l_texcoord_lightmap;
 out vec2 l_texcoord;

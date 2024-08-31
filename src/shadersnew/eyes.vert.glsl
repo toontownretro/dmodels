@@ -17,7 +17,7 @@ uniform mat4 p3d_ProjectionMatrix;
 
 uniform vec4 p3d_ColorScale;
 uniform mat4 p3d_ModelMatrix;
-uniform vec4 wspos_view;
+uniform vec3 wspos_view;
 
 uniform vec3 eyeOrigin[1];
 uniform vec4 irisProjectionU[1];

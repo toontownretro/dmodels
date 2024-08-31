@@ -55,6 +55,9 @@ layout(constant_id = 1) const bool HALFLAMBERT = false;
 
 #if HAS_SHADOW_SUNLIGHT
 uniform sampler2DArrayShadow p3d_CascadeShadowMap;
+uniform vec2 p3d_CascadeNearFar[4];
+uniform vec4 shadowOffsetParams;
+uniform sampler3D shadowOffsetTexture;
 in vec4 l_cascadeCoords[4];
 layout(constant_id = 6) const int NUM_CASCADES = 0;
 #endif // HAS_SHADOW_SUNLIGHT
@@ -217,9 +220,9 @@ ambientLookup(vec3 wnormal) {
 }
 
 #if DIRECT_LIGHT
-vec3 diffuseTerm(float NdotL, float shadow) {
+vec3 diffuseTerm(float NdotL, float shadow, bool doLightwarp) {
   float result;
-  if (false) {//(HALFLAMBERT) {
+  if (false) {//}(HALFLAMBERT) {
     result = clamp(NdotL * 0.5 + 0.5, 0, 1);
 #if !LIGHTWARP
     result *= result;
@@ -228,11 +231,13 @@ vec3 diffuseTerm(float NdotL, float shadow) {
     result = clamp(NdotL, 0, 1);
   }
 
-  //result *= shadow;
-
   vec3 diff = vec3(result);
 #if LIGHTWARP
-  diff = 2.0 * textureLod(lightWarpTexture, result, 0.0).rgb;
+  if (true) {
+    diff = 2.0 * textureLod(lightWarpTexture, result, 0.0).rgb;
+  } else {
+    diff = 2.0 * diff;
+  }
 #endif
 
   return diff;
@@ -288,10 +293,21 @@ void doLight(in ClusterLightData light, inout vec3 diffuseLighting, inout vec3 s
 #if HAS_SHADOW_SUNLIGHT
 #if !LIGHTWARP
     if (fNdotL > 0.0) {
-      GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, fNdotL, NUM_CASCADES);
+      GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, fNdotL, NUM_CASCADES, shadowOffsetTexture,
+        shadowOffsetParams.x, shadowOffsetParams.y, shadowOffsetParams.z, gl_FragCoord.xy, shadowOffsetParams.w, p3d_CascadeNearFar);
+    } else {
+      shadowFactor = 0.0;
     }
 #else
-    GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, fNdotL, NUM_CASCADES);
+    if (fNdotL > 0.0) {
+      GetSunShadow(shadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, fNdotL, NUM_CASCADES, shadowOffsetTexture,
+                 shadowOffsetParams.x, shadowOffsetParams.y, shadowOffsetParams.z, gl_FragCoord.xy, shadowOffsetParams.w, p3d_CascadeNearFar);
+
+      shadowFactor = mix(shadowFactor, 1.0, pow(1 - fNdotL, 4));
+
+    } else {
+      shadowFactor = 1.0;
+    }
 #endif
 #endif
 
@@ -319,11 +335,12 @@ void doLight(in ClusterLightData light, inout vec3 diffuseLighting, inout vec3 s
     //}
   }
 
-  lightAtten *= shadowFactor;
+  //lightAtten *= shadowFactor;
 
-  vec3 NdotL = diffuseTerm(fNdotL, shadowFactor);
+  // Don't lightwarp shadowed sun.
+  vec3 NdotL = diffuseTerm(fNdotL, shadowFactor, (light.type != LIGHT_TYPE_DIRECTIONAL));
 
-  diffuseLighting += lightColor * lightAtten * NdotL;
+  diffuseLighting += lightColor * lightAtten * NdotL * shadowFactor;
 
 #if PHONG
   vec3 localSpecular = vec3(0.0);

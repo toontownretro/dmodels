@@ -35,10 +35,12 @@ float aces(float x) {
 
 void main() {
   o_color = textureLod(sceneTexture, l_texcoord, 0);
+  //o_color.rgb = pow(o_color.rgb, vec3(1.0/2.2));
   //o_color.rgb = pow(o_color.rgb, vec3(0.833));
   //o_color.rgb *= 1.07;
-  o_color.rgb = vec3(aces(o_color.r), aces(o_color.g), aces(o_color.b));
-  //o_color.rgb = o_color.rgb * aces_input_mat;
-  //o_color.rgb = rtt_and_odt_fit(o_color.rgb);
-  //o_color.rgb = clamp(o_color.rgb * aces_output_mat, 0, 1);
+  //o_color.rgb = vec3(aces(o_color.r), aces(o_color.g), aces(o_color.b));
+  o_color.rgb = o_color.rgb * aces_input_mat;
+  o_color.rgb = rtt_and_odt_fit(o_color.rgb);
+  o_color.rgb = clamp(o_color.rgb * aces_output_mat, 0, 1);
+  o_color.rgb = pow(o_color.rgb, vec3(1.0/2.2));
 }

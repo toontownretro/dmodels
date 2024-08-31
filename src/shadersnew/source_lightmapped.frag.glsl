@@ -78,6 +78,9 @@ uniform struct p3d_LightSourceParameters {
 } p3d_LightSource[1];
 #if SUNLIGHT == 2
 uniform sampler2DArrayShadow p3d_CascadeShadowMap;
+uniform vec2 p3d_CascadeNearFar[4];
+uniform vec4 shadowOffsetParams;
+uniform sampler3D shadowOffsetTexture;
 in vec4 l_cascadeCoords[4];
 layout(constant_id = 3) const int NUM_CASCADES = 0;
 #endif
@@ -297,10 +300,11 @@ main() {
     NdotL = clamp(dot(normalize(p3d_LightSource[0].direction.xyz), worldNormal), 0.0, 1.0);
   }
 
-  if (NdotL > 0.0) {
+  if (dot(normalize(p3d_LightSource[0].direction.xyz), origWorldNormal) > 0.0) {
 #if SUNLIGHT == 2
     float sunShadowFactor = 0.0;
-    GetSunShadow(sunShadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, NdotL, NUM_CASCADES);
+    GetSunShadow(sunShadowFactor, p3d_CascadeShadowMap, l_cascadeCoords, NdotL, NUM_CASCADES, shadowOffsetTexture,
+      shadowOffsetParams.x, shadowOffsetParams.y, shadowOffsetParams.z, gl_FragCoord.xy, shadowOffsetParams.w, p3d_CascadeNearFar);
 #else
     float sunShadowFactor = 1.0;
 #endif
