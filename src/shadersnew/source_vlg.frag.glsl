@@ -27,8 +27,8 @@
 #pragma skip $[and $[BUMPMAP],$[not $[or $[RIMLIGHT],$[eq $[AMBIENT_LIGHT],2],$[DIRECT_LIGHT],$[ENVMAP]]]]
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_frag.inc.glsl"
-#include "shadersnew/common_shadows_frag.inc.glsl"
+#include "common_frag.inc.glsl"
+#include "common_shadows_frag.inc.glsl"
 
 // Pixel shader inputs.
 in vec4 l_world_pos;
@@ -70,7 +70,7 @@ uniform vec2 p3d_LensNearFar;
 uniform vec2 p3d_WindowSize;
 uniform vec3 p3d_LightLensDiv;
 uniform vec2 p3d_LightLensZScaleBias;
-#include "shadersnew/common_clustered_lighting.inc.glsl"
+#include "common_clustered_lighting.inc.glsl"
 
 #endif // DIRECT_LIGHT
 

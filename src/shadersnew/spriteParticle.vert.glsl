@@ -22,7 +22,7 @@
 // emulates fixed-function OpenGL point sprites.
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common.inc.glsl"
+#include "common.inc.glsl"
 
 uniform mat4 p3d_ModelViewMatrix;
 uniform mat4 p3d_ModelMatrix;

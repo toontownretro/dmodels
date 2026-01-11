@@ -11,7 +11,7 @@
 #ifndef COMMON_SHADOWS_VERT_INC_GLSL
 #define COMMON_SHADOWS_VERT_INC_GLSL
 
-#include "shadersnew/common.inc.glsl"
+#include "common.inc.glsl"
 
 // FIXME: Make these configurable
 #define SLOPE_BIAS 1

@@ -13,9 +13,9 @@
 const float PI = 3.141592;
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common.inc.glsl"
-#include "shadersnew/common_frag.inc.glsl"
-#include "shadersnew/common_shadows_frag.inc.glsl"
+#include "common.inc.glsl"
+#include "common_frag.inc.glsl"
+#include "common_shadows_frag.inc.glsl"
 
 uniform sampler2D albedo_sampler;
 uniform sampler2D normal_sampler;
@@ -75,7 +75,7 @@ uniform vec2 p3d_LensNearFar;
 uniform vec2 p3d_WindowSize;
 uniform vec3 p3d_LightLensDiv;
 uniform vec2 p3d_LightLensZScaleBias;
-#include "shadersnew/common_clustered_lighting.inc.glsl"
+#include "common_clustered_lighting.inc.glsl"
 
 #if AMBIENT_LIGHT == 1
 // Flat ambient.

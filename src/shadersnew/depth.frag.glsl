@@ -17,7 +17,7 @@
  */
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_frag.inc.glsl"
+#include "common_frag.inc.glsl"
 
 in vec3 l_texcoord_alpha;
 in vec4 l_worldPosition;

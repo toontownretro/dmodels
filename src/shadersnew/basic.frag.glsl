@@ -7,7 +7,7 @@
 #pragma combo PLANAR_REFLECTION 0 1
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_frag.inc.glsl"
+#include "common_frag.inc.glsl"
 
 // Uniforms for volume tiled lighting.
 uniform samplerBuffer p3d_StaticLightBuffer;
@@ -17,7 +17,7 @@ uniform vec2 p3d_LensNearFar;
 uniform vec2 p3d_WindowSize;
 uniform vec3 p3d_LightLensDiv;
 uniform vec2 p3d_LightLensZScaleBias;
-#include "shadersnew/common_clustered_lighting.inc.glsl"
+#include "common_clustered_lighting.inc.glsl"
 
 #if BASETEXTURE
 in vec2 l_texcoord;

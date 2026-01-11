@@ -9,8 +9,8 @@
  */
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_vert.inc.glsl"
-#include "shadersnew/common.inc.glsl"
+#include "common_vert.inc.glsl"
+#include "common.inc.glsl"
 
 uniform mat4 p3d_ViewMatrix;
 uniform mat4 p3d_ProjectionMatrix;

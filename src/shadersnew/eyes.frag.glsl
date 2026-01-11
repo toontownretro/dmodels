@@ -16,7 +16,7 @@
 
 #pragma skip $[and $[not $[RAYTRACESPHERE]],$[RAYTRACEDISCARD]]
 
-#include "shadersnew/common_frag.inc.glsl"
+#include "common_frag.inc.glsl"
 
 in vec2 l_texcoord;
 in vec4 l_tangentViewVector;

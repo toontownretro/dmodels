@@ -4,7 +4,7 @@
 #pragma combo FOG 0 1
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common.inc.glsl"
+#include "common.inc.glsl"
 
 uniform sampler2DArray lightmapSampler;
 uniform sampler2D reflectionSampler;

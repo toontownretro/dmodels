@@ -24,7 +24,7 @@
  */
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_frag.inc.glsl"
+#include "common_frag.inc.glsl"
 
 in vec2 g_tex_coord;
 in vec4 g_vertex_color;

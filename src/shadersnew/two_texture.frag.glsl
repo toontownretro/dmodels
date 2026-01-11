@@ -4,8 +4,8 @@
 #pragma combo LIGHTMAP   0 1
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_frag.inc.glsl"
-#include "shadersnew/common.inc.glsl"
+#include "common_frag.inc.glsl"
+#include "common.inc.glsl"
 
 uniform sampler2D baseTexture;
 uniform sampler2D baseTexture2;

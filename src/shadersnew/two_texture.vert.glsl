@@ -4,7 +4,7 @@
 #pragma combo LIGHTMAP 0 1
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_vert.inc.glsl"
+#include "common_vert.inc.glsl"
 
 uniform mat4 p3d_ViewMatrix;
 uniform mat4 p3d_ProjectionMatrix;

@@ -12,7 +12,7 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_ARB_shader_viewport_layer_array : enable
 
-#include "shadersnew/common_vert.inc.glsl"
+#include "common_vert.inc.glsl"
 
 uniform mat4 p3d_CascadeMVPs[4];
 

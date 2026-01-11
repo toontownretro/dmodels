@@ -2,7 +2,7 @@
 #ifndef COMMON_FRAG_INC_GLSL
 #define COMMON_FRAG_INC_GLSL
 
-#include "shadersnew/common.inc.glsl"
+#include "common.inc.glsl"
 
 #define M_none 0
 #define M_never 1

@@ -5,8 +5,8 @@
 #pragma combo LIGHTMAP 0 1
 
 #extension GL_GOOGLE_include_directive : enable
-#include "shadersnew/common_vert.inc.glsl"
-#include "shadersnew/common_shadows_vert.inc.glsl"
+#include "common_vert.inc.glsl"
+#include "common_shadows_vert.inc.glsl"
 
 // Per-view uniforms.
 uniform mat4 p3d_ViewMatrix;
